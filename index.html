@@ -1,88 +1,28 @@
-<!DOCTYPE html>
+
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>UK Highways Marker Finder</title>
-
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 15px;
-      background: #f5f5f5;
-      color: #222;
-    }
-
+    body { font-family: Arial, sans-serif; margin: 15px; background: #f5f5f5; color: #222; }
     h1 { font-size: 24px; }
-
-    .panel {
-      background: white;
-      padding: 14px;
-      margin-bottom: 12px;
-      border-radius: 8px;
-      border: 1px solid #ddd;
-    }
-
-    input, button {
-      box-sizing: border-box;
-      width: 100%;
-      padding: 11px;
-      margin: 5px 0;
-      font-size: 16px;
-    }
-
-    button {
-      background: #1769aa;
-      color: white;
-      border: 0;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-
+    .panel { background: white; padding: 14px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #ddd; }
+    input, button { box-sizing: border-box; width: 100%; padding: 11px; margin: 5px 0; font-size: 16px; }
+    button { background: #1769aa; color: white; border: 0; border-radius: 5px; cursor: pointer; }
     button:hover { background: #0e4e82; }
-
-    #map {
-      height: 430px;
-      width: 100%;
-      background: #e5e5e5;
-      border: 1px solid #aaa;
-      border-radius: 6px;
-    }
-
-    #status, #results, #nearby {
-      margin-top: 10px;
-      line-height: 1.5;
-    }
-
-    .result {
-      background: #fff;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      padding: 10px;
-      margin: 7px 0;
-      cursor: pointer;
-    }
-
+    #map { height: 430px; width: 100%; background: #e5e5e5; border: 1px solid #aaa; border-radius: 6px; }
+    #status, #results, #nearby { margin-top: 10px; line-height: 1.5; }
+    .result { background: #fff; border: 1px solid #ccc; border-radius: 5px; padding: 10px; margin: 7px 0; cursor: pointer; }
     .result:hover { background: #edf5fc; }
-
-    .small {
-      font-size: 13px;
-      color: #555;
-    }
-
+    .small { font-size: 13px; color: #555; }
     .good { color: #16733b; }
     .warning { color: #a35b00; }
-
-    @media (min-width: 750px) {
-      body { max-width: 1100px; margin: 20px auto; }
-    }
+    @media (min-width: 750px) { body { max-width: 1100px; margin: 20px auto; } }
   </style>
 </head>
-
 <body>
-
   <h1>UK Highways Marker Finder</h1>
 
   <div class="panel">
@@ -101,13 +41,10 @@
     <h3>3. Find a marker post</h3>
     <label for="markerSearch">Marker-post reference</label>
     <input id="markerSearch" type="text" placeholder="Example: M1 P469/B">
-
     <label for="roadSearch">Road (optional)</label>
     <input id="roadSearch" type="text" placeholder="Example: M1">
-
     <button id="searchButton">Find marker post</button>
     <button id="locationButton">Find my location and nearest marker</button>
-
     <div id="status">Load your CSV database to begin.</div>
   </div>
 
@@ -130,10 +67,7 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
   <script>
-    // --------------------------------------------------
     // MAP SETUP
-    // --------------------------------------------------
-
     const map = L.map("map").setView([53.5, -2.5], 6);
 
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -150,14 +84,10 @@
         '<span class="warning">The map tile server has refused a request (possibly 403). Your uploaded data is not affected.</span>';
     });
 
-    // --------------------------------------------------
     // DATA STORAGE
-    // --------------------------------------------------
-
     let markerPosts = [];
     let junctions = [];
     let slipRoads = [];
-
     let selectedMarker = null;
 
     const csvFile = document.getElementById("csvFile");
@@ -181,23 +111,17 @@
     function distanceMetres(lat1, lon1, lat2, lon2) {
       const R = 6371000;
       const toRad = Math.PI / 180;
-
       const dLat = (lat2 - lat1) * toRad;
       const dLon = (lon2 - lon1) * toRad;
-
       const a =
         Math.sin(dLat / 2) ** 2 +
         Math.cos(lat1 * toRad) *
         Math.cos(lat2 * toRad) *
         Math.sin(dLon / 2) ** 2;
-
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
-    // --------------------------------------------------
     // LOAD MARKER-POST CSV
-    // --------------------------------------------------
-
     csvFile.addEventListener("change", function () {
       const file = this.files[0];
       if (!file) return;
@@ -243,13 +167,9 @@
       });
     });
 
-    // --------------------------------------------------
     // LOAD MULTIPLE GEOJSON FILES
-    // --------------------------------------------------
-
     geojsonFiles.addEventListener("change", async function () {
       const files = Array.from(this.files);
-
       if (!files.length) return;
 
       junctions = [];
@@ -334,7 +254,6 @@
               });
             }
           });
-
         } catch (error) {
           console.error("Could not load " + file.name, error);
         }
@@ -345,7 +264,6 @@
         slipRoads.length.toLocaleString() + " slip-road sections loaded from " +
         files.length + " files.";
 
-      // Display junction points on the map.
       junctionLayer.clearLayers();
 
       junctions.forEach(function (j) {
@@ -362,10 +280,7 @@
       setStatus("Junction and slip-road data ready.");
     });
 
-    // --------------------------------------------------
     // DISTANCE FROM A POINT TO A SLIP-ROAD LINE
-    // --------------------------------------------------
-
     function pointToSegmentDistance(lat, lon, a, b) {
       const scale = 111320;
       const cosLat = Math.cos(lat * Math.PI / 180);
@@ -375,13 +290,11 @@
 
       const ax = (a[0] - lon) * scale * cosLat;
       const ay = (a[1] - lat) * scale;
-
       const bx = (b[0] - lon) * scale * cosLat;
       const by = (b[1] - lat) * scale;
 
       const dx = bx - ax;
       const dy = by - ay;
-
       const lengthSquared = dx * dx + dy * dy;
 
       let t = 0;
@@ -414,10 +327,7 @@
       return nearest;
     }
 
-    // --------------------------------------------------
     // DISPLAY A SELECTED MARKER POST
-    // --------------------------------------------------
-
     function showMarker(post) {
       selectedMarker = post;
 
@@ -431,15 +341,17 @@
         .addTo(markerLayer)
         .openPopup();
 
+      // Move the map immediately, then calculate nearby roads
+      // after the browser has had time to redraw the map.
       map.setView([post.lat, post.lon], 14);
+      map.invalidateSize();
 
-      showNearby(post);
+      setTimeout(function () {
+        showNearby(post);
+      }, 0);
     }
 
-    // --------------------------------------------------
     // FIND NEARBY JUNCTIONS AND SLIP ROADS
-    // --------------------------------------------------
-
     function showNearby(post) {
       junctionLayer.eachLayer(function (layer) {
         if (layer.setStyle) {
@@ -504,6 +416,7 @@
       heading.textContent =
         nearbyJunctions.length + " junctions within 5 km; " +
         nearbySlips.length + " slip-road sections within 150 m.";
+
       output.appendChild(heading);
 
       nearbyJunctions.slice(0, 20).forEach(function (entry) {
@@ -512,6 +425,7 @@
           entry.item.name +
           (entry.item.ref ? " (" + entry.item.ref + ")" : "") +
           " — " + Math.round(entry.distance) + " m away";
+
         output.appendChild(p);
       });
 
@@ -528,10 +442,7 @@
       }
     }
 
-    // --------------------------------------------------
     // SEARCH MARKER POSTS
-    // --------------------------------------------------
-
     document.getElementById("searchButton").addEventListener("click", function () {
       if (!markerPosts.length) {
         setStatus("Please load the marker-post CSV first.");
@@ -599,10 +510,7 @@
       setStatus(matches.length + " matching marker posts displayed.");
     });
 
-    // --------------------------------------------------
     // GPS: FIND NEAREST MARKER POST
-    // --------------------------------------------------
-
     document.getElementById("locationButton").addEventListener("click", function () {
       if (!markerPosts.length) {
         setStatus("Please load the marker-post CSV first.");
@@ -670,7 +578,6 @@
         }
       );
     });
-
   </script>
 </body>
 </html>
