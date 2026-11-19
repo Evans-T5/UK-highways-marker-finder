@@ -587,7 +587,20 @@
 
         item.appendChild(title);
         item.appendChild(details);
+        const directions = document.createElement("a");
+        directions.textContent = "Get directions in Google Maps";
+        directions.href =
+          "https://www.google.com/maps/dir/?api=1&destination=" +
+          post.lat + "," + post.lon;
+        directions.target = "_blank";
+        directions.rel = "noopener";
+        directions.style.display = "block";
+        directions.style.marginTop = "6px";
+        directions.addEventListener("click", function (event) {
+          event.stopPropagation();
+        });
 
+   
         item.addEventListener("click", function () {
           showMarker(post);
           setStatus("Selected " + post.reference + " on " + post.road);
