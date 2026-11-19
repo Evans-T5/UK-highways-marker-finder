@@ -532,7 +532,7 @@
     // SEARCH MARKER POSTS
     // --------------------------------------------------
 
-    document.getElementById("searchButton").addEventListener("click", function () {
+      document.getElementById("searchButton").addEventListener("click", function () {
       if (!markerPosts.length) {
         setStatus("Please load the marker-post CSV first.");
         return;
@@ -587,6 +587,7 @@
 
         item.appendChild(title);
         item.appendChild(details);
+
         const directions = document.createElement("a");
         directions.textContent = "Get directions in Google Maps";
         directions.href =
@@ -600,7 +601,8 @@
           event.stopPropagation();
         });
 
-   
+        item.appendChild(directions);
+
         item.addEventListener("click", function () {
           showMarker(post);
           setStatus("Selected " + post.reference + " on " + post.road);
@@ -609,8 +611,34 @@
         results.appendChild(item);
       });
 
+      if (matches.length === 1) {
+        showMarker(matches[0]);
+      } else {
+        showMarker(matches[0]);
+
+        matches.slice(1).forEach(function (post) {
+          L.marker([post.lat, post.lon])
+            .bindPopup(
+              "<b>" + post.reference + "</b><br>" + post.road
+            )
+            .addTo(markerLayer);
+        });
+
+        const bounds = L.latLngBounds(
+          matches.map(function (post) {
+            return [post.lat, post.lon];
+          })
+        );
+
+        map.fitBounds(bounds, {
+          padding: [30, 30],
+          maxZoom: 14
+        });
+      }
+
       setStatus(matches.length + " matching marker posts displayed.");
     });
+ 
 
     // --------------------------------------------------
     // GPS: FIND NEAREST MARKER POST
