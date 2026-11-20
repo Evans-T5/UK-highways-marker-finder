@@ -86,15 +86,10 @@
   <h1>UK Highways Marker Finder</h1>
 
   <div class="panel">
-    <h3>1. Load marker-post database</h3>
-    <input type="file" id="csvFile" accept=".csv">
-    <div id="csvMessage">No marker-post database loaded.</div>
-  </div>
-
-  <div class="panel">
-    <h3>2. Load junction and slip-road files</h3>
-    <input type="file" id="geojsonFiles" accept=".geojson,.json" multiple>
-    <div id="geoMessage">No junction files loaded.</div>
+    <h3>Automatic data loading</h3>
+    <div id="csvMessage">Connecting to marker-post database...</div>
+    <div id="geoMessage">Connecting to junction and slip-road data...</div>
+    <p class="small">The databases load automatically when the app opens. An internet connection is required.</p>
   </div>
 
   <div class="panel">
@@ -160,8 +155,6 @@
 
     let selectedMarker = null;
 
-    const csvFile = document.getElementById("csvFile");
-    const geojsonFiles = document.getElementById("geojsonFiles");
 
     function setStatus(message) {
       document.getElementById("status").textContent = message;
@@ -195,68 +188,92 @@
     }
 
     // --------------------------------------------------
-    // LOAD MARKER-POST CSV
+    // AUTOMATIC DATA LOADING FROM THE PROJECT
     // --------------------------------------------------
 
-    csvFile.addEventListener("change", function () {
-      const file = this.files[0];
-      if (!file) return;
+    const csvUrl = "./Gazetteer_All_Mposts_with_GPS.csv";
+    const geojsonFileNames = [
+  "Berkshire & oxfordshire sliproads export (1).geojson",
+  "Camebridge & Bedfordshire slip roads export (1).geojson",
+  "East Anglia export (1).geojson",
+  "East Midlands slip roads export (1).geojson",
+  "Essex slip roads export (1).geojson",
+  "Kent & east Sussex export (1).geojson",
+  "Kent essex export (1).geojson",
+  "London export (1) - Copy.geojson",
+  "London export (1).geojson",
+  "Midlands export (1).geojson",
+  "Norfolk & suffolk slip roads export (1).geojson",
+  "North & south wales slip roads export (1).geojson",
+  "Northeast slip roads export (1).geojson",
+  "Northwest export (1).geojson",
+  "Scotland central belt slip roads .geojson",
+  "Scotland export (1).geojson",
+  "Scotland north slip roads export (1).geojson",
+  "Scotland south slip roads export (1).geojson",
+  "South east junctions export (1).geojson",
+  "South east sliproads export (1).geojson",
+  "South west export (1).geojson",
+  "Surry slip roads export (1).geojson",
+  "Wales export (1).geojson",
+  "West midlands slip roads export (1).geojson",
+  "West sussex and hampshire slip roads export (1).geojson",
+  "Yorkshire northeast export (1).geojson",
+  "Yorkshire slip roads export (1).geojson"
+];
 
-      document.getElementById("csvMessage").textContent = "Loading CSV...";
+    function loadMarkerCSV() {
+      return new Promise(function (resolve) {
+        document.getElementById("csvMessage").textContent =
+          "Downloading marker-post database...";
 
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
+        Papa.parse(csvUrl, {
+          download: true,
+          header: true,
+          skipEmptyLines: true,
 
-        complete: function (result) {
-          markerPosts = [];
+          complete: function (result) {
+            markerPosts = [];
 
-          result.data.forEach(function (row) {
-            const lat = Number(getField(row, "Latitude"));
-            const lon = Number(getField(row, "Longitude"));
+            result.data.forEach(function (row) {
+              const lat = Number(getField(row, "Latitude"));
+              const lon = Number(getField(row, "Longitude"));
 
-            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-            if (lat < 49 || lat > 61 || lon < -9 || lon > 3) return;
+              if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+              if (lat < 49 || lat > 61 || lon < -9 || lon > 3) return;
 
-            const bd = getField(row, "BD");
-            const userFormat = getField(row, "UserFormat");
+              const bd = getField(row, "BD");
+              const userFormat = getField(row, "UserFormat");
 
-            markerPosts.push({
-              reference: String(bd || userFormat || "").trim(),
-              road: String(getField(row, "DD") || "").trim(),
-              lat: lat,
-              lon: lon,
-              original: row
+              markerPosts.push({
+                reference: String(bd || userFormat || "").trim(),
+                road: String(getField(row, "DD") || "").trim(),
+                lat: lat,
+                lon: lon,
+                original: row
+              });
             });
-          });
 
-          document.getElementById("csvMessage").textContent =
-            markerPosts.length.toLocaleString() + " marker posts loaded.";
+            document.getElementById("csvMessage").textContent =
+              markerPosts.length.toLocaleString() + " marker posts loaded automatically.";
 
-          setStatus("Marker-post database ready.");
-        },
+            setStatus("Marker-post database ready.");
+            resolve(true);
+          },
 
-        error: function (error) {
-          document.getElementById("csvMessage").textContent =
-            "CSV loading error: " + error.message;
-        }
+          error: function (error) {
+            document.getElementById("csvMessage").textContent =
+              "Could not load marker-post database: " + error.message;
+            resolve(false);
+          }
+        });
       });
-    });
+    }
 
-    // --------------------------------------------------
-    // LOAD MULTIPLE GEOJSON FILES
-    // --------------------------------------------------
-
-    geojsonFiles.addEventListener("change", async function () {
-      const files = Array.from(this.files);
-
-      if (!files.length) return;
-
-      junctions = [];
-      slipRoads = [];
-
-      const junctionKeys = new Set();
-      const slipKeys = new Set();
+    function processGeoJSON(data, junctionKeys, slipKeys) {
+      const features = data.type === "FeatureCollection"
+        ? data.features
+        : [data];
 
       const linkTypes = [
         "motorway_link",
@@ -265,86 +282,69 @@
         "secondary_link"
       ];
 
-      for (const file of files) {
-        try {
-          const text = await file.text();
-          const data = JSON.parse(text);
+      features.forEach(function (feature) {
+        if (!feature || !feature.geometry) return;
 
-          const features = data.type === "FeatureCollection"
-            ? data.features
-            : [data];
+        const props = feature.properties || {};
+        const highway = String(props.highway || "").toLowerCase();
+        const geometry = feature.geometry;
 
-          features.forEach(function (feature) {
-            if (!feature || !feature.geometry) return;
+        if (
+          geometry.type === "Point" &&
+          (highway === "motorway_junction" ||
+           props.junction !== undefined)
+        ) {
+          const coordinates = geometry.coordinates || [];
+          const lon = Number(coordinates[0]);
+          const lat = Number(coordinates[1]);
 
-            const props = feature.properties || {};
-            const highway = String(props.highway || "").toLowerCase();
-            const geometry = feature.geometry;
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
 
-            if (
-              geometry.type === "Point" &&
-              (highway === "motorway_junction" ||
-               props.junction !== undefined)
-            ) {
-              const coordinates = geometry.coordinates;
-              const lon = Number(coordinates[0]);
-              const lat = Number(coordinates[1]);
+          const key = lat.toFixed(6) + "," + lon.toFixed(6);
 
-              if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+          if (!junctionKeys.has(key)) {
+            junctionKeys.add(key);
 
-              const key = lat.toFixed(6) + "," + lon.toFixed(6);
+            junctions.push({
+              lat: lat,
+              lon: lon,
+              name: props.name || props.ref || "Unnamed junction",
+              ref: props.ref || "",
+              highway: highway
+            });
+          }
+        }
 
-              if (!junctionKeys.has(key)) {
-                junctionKeys.add(key);
+        if (
+          linkTypes.includes(highway) &&
+          (geometry.type === "LineString" ||
+           geometry.type === "MultiLineString")
+        ) {
+          const paths = geometry.type === "LineString"
+            ? [geometry.coordinates]
+            : geometry.coordinates;
 
-                junctions.push({
-                  lat: lat,
-                  lon: lon,
-                  name: props.name || props.ref || "Unnamed junction",
-                  ref: props.ref || "",
-                  highway: highway
-                });
-              }
-            }
+          paths.forEach(function (path) {
+            if (!Array.isArray(path) || path.length < 2) return;
 
-            if (
-              linkTypes.includes(highway) &&
-              (geometry.type === "LineString" ||
-               geometry.type === "MultiLineString")
-            ) {
-              const paths = geometry.type === "LineString"
-                ? [geometry.coordinates]
-                : geometry.coordinates;
+            const key = JSON.stringify(path);
 
-              paths.forEach(function (path) {
-                if (!Array.isArray(path) || path.length < 2) return;
+            if (!slipKeys.has(key)) {
+              slipKeys.add(key);
 
-                const key = JSON.stringify(path);
-
-                if (!slipKeys.has(key)) {
-                  slipKeys.add(key);
-
-                  slipRoads.push({
-                    coordinates: path,
-                    highway: highway,
-                    name: props.name || "",
-                    ref: props.ref || ""
-                  });
-                }
+              slipRoads.push({
+                coordinates: path,
+                highway: highway,
+                name: props.name || "",
+                ref: props.ref || ""
               });
             }
           });
-
-        } catch (error) {
-          console.error("Could not load " + file.name, error);
         }
-      }
+      });
+    }
 
-      document.getElementById("geoMessage").textContent =
-        junctions.length.toLocaleString() + " junctions and " +
-        slipRoads.length.toLocaleString() + " slip-road sections loaded from " +
-        files.length + " files.";
-
+    function drawJunctions() {
       junctionLayer.clearLayers();
 
       junctions.forEach(function (j) {
@@ -357,9 +357,80 @@
         .bindPopup(j.name + (j.ref ? " (" + j.ref + ")" : ""))
         .addTo(junctionLayer);
       });
+    }
 
-      setStatus("Junction and slip-road data ready.");
-    });
+    async function loadGeoJSONFiles() {
+      junctions = [];
+      slipRoads = [];
+
+      const junctionKeys = new Set();
+      const slipKeys = new Set();
+      let loadedFiles = 0;
+      const failedFiles = [];
+
+      document.getElementById("geoMessage").textContent =
+        "Downloading 27 junction and slip-road files...";
+
+      // Load three files at a time to avoid overwhelming phones and laptops.
+      for (let i = 0; i < geojsonFileNames.length; i += 3) {
+        const batch = geojsonFileNames.slice(i, i + 3);
+
+        const results = await Promise.all(batch.map(async function (fileName) {
+          try {
+            const response = await fetch("./" + encodeURIComponent(fileName));
+
+            if (!response.ok) {
+              throw new Error("HTTP " + response.status);
+            }
+
+            const data = await response.json();
+            processGeoJSON(data, junctionKeys, slipKeys);
+            return true;
+          } catch (error) {
+            console.error("Could not load " + fileName, error);
+            failedFiles.push(fileName);
+            return false;
+          }
+        }));
+
+        loadedFiles += results.filter(Boolean).length;
+
+        document.getElementById("geoMessage").textContent =
+          loadedFiles + " of " + geojsonFileNames.length +
+          " junction and slip-road files loaded...";
+      }
+
+      drawJunctions();
+
+      document.getElementById("geoMessage").textContent =
+        junctions.length.toLocaleString() + " junctions and " +
+        slipRoads.length.toLocaleString() + " slip-road sections loaded from " +
+        loadedFiles + " of " + geojsonFileNames.length + " files.";
+
+      if (failedFiles.length) {
+        document.getElementById("geoMessage").textContent +=
+          " " + failedFiles.length + " file(s) could not be loaded. Check your connection and refresh.";
+
+        return false;
+      }
+
+      return true;
+    }
+
+    async function autoLoadData() {
+      setStatus("Loading your databases automatically. Please wait...");
+
+      const results = await Promise.all([
+        loadMarkerCSV(),
+        loadGeoJSONFiles()
+      ]);
+
+      if (results.every(Boolean)) {
+        setStatus("All marker-post, junction and slip-road data is ready.");
+      } else {
+        setStatus("Some data could not be loaded. Check the messages above and refresh when connected to the internet.");
+      }
+    }
 
     // --------------------------------------------------
     // DISTANCE FROM A POINT TO A SLIP-ROAD LINE
@@ -733,6 +804,9 @@
         }
       );
     });
+
+    // Start loading both databases as soon as the app opens.
+    autoLoadData();
 
   </script>
 </body>
