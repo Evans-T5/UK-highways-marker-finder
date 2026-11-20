@@ -345,7 +345,6 @@
         slipRoads.length.toLocaleString() + " slip-road sections loaded from " +
         files.length + " files.";
 
-      // Display junction points on the map.
       junctionLayer.clearLayers();
 
       junctions.forEach(function (j) {
@@ -431,9 +430,7 @@
         .addTo(markerLayer)
         .openPopup();
 
-      map.setView([post.lat, post.lon], 14);
-
-     setTimeout(() => showNearby(post), 0);
+      setTimeout(() => showNearby(post), 0);
     }
 
     // --------------------------------------------------
@@ -532,7 +529,7 @@
     // SEARCH MARKER POSTS
     // --------------------------------------------------
 
-      document.getElementById("searchButton").addEventListener("click", function () {
+    document.getElementById("searchButton").addEventListener("click", function () {
       if (!markerPosts.length) {
         setStatus("Please load the marker-post CSV first.");
         return;
@@ -638,95 +635,104 @@
 
       setStatus(matches.length + " matching marker posts displayed.");
     });
- 
 
     // --------------------------------------------------
     // GPS: FIND NEAREST MARKER POST
     // --------------------------------------------------
 
-  
-document.getElementById("locationButton").addEventListener("click", function () {
-  if (!markerPosts.length) {
-    setStatus("Please load the marker-post CSV first.");
-    return;
-  }
-
-  if (!navigator.geolocation) {
-    setStatus("This browser does not support location services.");
-    return;
-  }
-
-  setStatus("Finding your location...");
-
-  navigator.geolocation.getCurrentPosition(
-    function (position) {
-      const lat = position.coords.latitude;
-      const lon = position.coords.longitude;
-      const accuracy = Math.round(position.coords.accuracy);
-
-      let nearest = null;
-      let nearestDistance = Infinity;
-
-      markerPosts.forEach(function (post) {
-        const distance = distanceMetres(
-          lat, lon, post.lat, post.lon
-        );
-
-        if (distance < nearestDistance) {
-          nearestDistance = distance;
-          nearest = post;
-        }
-      });
-
-      if (!nearest) {
-        setStatus("No marker posts available.");
+    document.getElementById("locationButton").addEventListener("click", function () {
+      if (!markerPosts.length) {
+        setStatus("Please load the marker-post CSV first.");
         return;
       }
 
-      // Display the nearest marker post
-      showMarker(nearest);
+      if (!navigator.geolocation) {
+        setStatus("This browser does not support location services.");
+        return;
+      }
 
-      // Display your actual reported location
-      L.circleMarker([lat, lon], {
-        radius: 9,
-        color: "#1769aa",
-        fillColor: "#1769aa",
-        fillOpacity: 1
-      })
-        .bindPopup("Your reported location")
-        .addTo(markerLayer);
+      setStatus("Finding your location...");
 
-      // Zoom to show both locations
-      const bounds = L.latLngBounds(
-        [lat, lon],
-        [nearest.lat, nearest.lon]
+      navigator.geolocation.getCurrentPosition(
+        function (position) {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+          const accuracy = Math.round(position.coords.accuracy);
+
+          let nearest = null;
+          let nearestDistance = Infinity;
+
+          markerPosts.forEach(function (post) {
+            const distance = distanceMetres(
+              lat, lon, post.lat, post.lon
+            );
+
+            if (distance < nearestDistance) {
+              nearestDistance = distance;
+              nearest = post;
+            }
+          });
+
+          if (!nearest) {
+            setStatus("No marker posts available.");
+            return;
+          }
+
+          // Display the nearest marker post
+          showMarker(nearest);
+
+          // Display your actual reported location
+          L.circleMarker([lat, lon], {
+            radius: 9,
+            color: "#1769aa",
+            fillColor: "#1769aa",
+            fillOpacity: 1
+          })
+            .bindPopup("Your reported location")
+            .addTo(markerLayer);
+
+          // Zoom to show both locations
+          const bounds = L.latLngBounds(
+            [lat, lon],
+            [nearest.lat, nearest.lon]
+          );
+
+          map.fitBounds(bounds, {
+            padding: [40, 40],
+            maxZoom: 15
+          });
+
+          // Show a warning if the location accuracy is poor
+          let locationWarning = "";
+
+          if (accuracy > 1000) {
+            locationWarning =
+              " WARNING: Your laptop location is very inaccurate.";
+          } else if (accuracy > 100) {
+            locationWarning =
+              " Location accuracy is limited.";
+          }
+
+          setStatus(
+            "Nearest marker: " + nearest.reference +
+            " on " + nearest.road +
+            " — approximately " + Math.round(nearestDistance) +
+            " metres away. Location accuracy estimate: " +
+            accuracy + " metres." + locationWarning
+          );
+        },
+
+        function (error) {
+          setStatus("Could not get your location: " + error.message);
+        },
+
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 30000
+        }
       );
-
-      map.fitBounds(bounds, {
-        padding: [40, 40],
-        maxZoom: 15
-      });
-
-      setStatus(
-        "Nearest marker: " + nearest.reference +
-        " on " + nearest.road +
-        " — approximately " + Math.round(nearestDistance) +
-        " metres away. Location accuracy estimate: " +
-        accuracy + " metres."
-      );
-    },
-
-    function (error) {
-      setStatus("Could not get your location: " + error.message);
-    },
-
-    {
-      enableHighAccuracy: true,
-      timeout: 15000,
-      maximumAge: 30000
-    }
-  );
-});
+    });
 
   </script>
 </body>
