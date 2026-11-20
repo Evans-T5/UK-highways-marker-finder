@@ -491,6 +491,9 @@
     function showMarker(post) {
       selectedMarker = post;
 
+      // Zoom in to the selected marker post.
+      map.setView([post.lat, post.lon], 15);
+
       markerLayer.clearLayers();
       slipLayer.clearLayers();
 
