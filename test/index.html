@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UK Highways Marker Finder</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 15px;
+      background: #f5f5f5;
+      color: #222;
+    }
+
+    h1 { font-size: 24px; }
+
+    .panel {
+      background: white;
+      padding: 14px;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+    }
+
+    input, button {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 11px;
+      margin: 5px 0;
+      font-size: 16px;
+    }
+
+    button {
+      background: #1769aa;
+      color: white;
+      border: 0;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover { background: #0e4e82; }
+
+    #map {
+      height: 430px;
+      width: 100%;
+      background: #e5e5e5;
+      border: 1px solid #aaa;
+      border-radius: 6px;
+    }
+
+    #status, #results, #nearby {
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+
+    .result {
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 10px;
+      margin: 7px 0;
+      cursor: pointer;
+    }
+
+    .result:hover { background: #edf5fc; }
+
+    .small {
+      font-size: 13px;
+      color: #555;
+    }
+
+    .good { color: #16733b; }
+    .warning { color: #a35b00; }
+
+    @media (min-width: 750px) {
+      body { max-width: 1100px; margin: 20px auto; }
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>UK Highways Marker Finder</h1>
+
+  <div class="panel">
+    <h3>Automatic data loading</h3>
+    <div id="csvMessage">Connecting to marker-post database...</div>
+    <div id="geoMessage">Connecting to junction and slip-road data...</div>
+    <p class="small">The databases load automatically when the app opens. An internet connection is required.</p>
+  </div>
+
+  <div class="panel">
+    <h3>3. Find a marker post</h3>
+    <label for="markerSearch">Marker-post reference</label>
+    <input id="markerSearch" type="text" placeholder="Example: M1 P469/B">
+
+    <label for="roadSearch">Road (optional)</label>
+    <input id="roadSearch" type="text" placeholder="Example: M1">
+
+    <button id="searchButton">Find marker post</button>
+    <button id="locationButton">Find my location and nearest marker</button>
+
+    <div id="status">Load your CSV database to begin.</div>
+  </div>
+
+  <div class="panel">
+    <h3>Map</h3>
+    <div id="map"></div>
+  </div>
+
+  <div class="panel">
+    <h3>Search results</h3>
+    <div id="results">No search results yet.</div>
+  </div>
+
+  <div class="panel">
+    <h3>Nearby junctions and slip roads</h3>
+    <div id="nearby">Select a marker post to see nearby junction information.</div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <script>
+    // --------------------------------------------------
+    // MAP SETUP
+    // --------------------------------------------------
+
+    const map = L.map("map").setView([53.5, -2.5], 6);
+
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+
+    const markerLayer = L.layerGroup().addTo(map);
+    const junctionLayer = L.layerGroup().addTo(map);
+    const slipLayer = L.layerGroup().addTo(map);
+
+    map.on("tileerror", function () {
+      document.getElementById("status").innerHTML =
+        '<span class="warning">The map tile server has refused a request (possibly 403). Your uploaded data is not affected.</span>';
+    });
+
+    // --------------------------------------------------
+    // DATA STORAGE
+    // --------------------------------------------------
+
+    let markerPosts = [];
+    let junctions = [];
+    let slipRoads = [];
+
+    let selectedMarker = null;
+
+
+    function setStatus(message) {
+      document.getElementById("status").textContent = message;
+    }
+
+    function normalise(value) {
+      return String(value || "").trim().toUpperCase().replace(/\s+/g, "");
+    }
+
+    function getField(row, field) {
+      const key = Object.keys(row).find(
+        k => k.trim().toUpperCase() === field.toUpperCase()
+      );
+      return key ? row[key] : "";
+    }
+
+    function distanceMetres(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const toRad = Math.PI / 180;
+
+      const dLat = (lat2 - lat1) * toRad;
+      const dLon = (lon2 - lon1) * toRad;
+
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1 * toRad) *
+        Math.cos(lat2 * toRad) *
+        Math.sin(dLon / 2) ** 2;
+
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    // --------------------------------------------------
+    // AUTOMATIC DATA LOADING FROM THE PROJECT
+    // --------------------------------------------------
+
+    const csvUrl = "../Gazetteer_All_Mposts_with_GPS.csv";
+    const geojsonFileNames = [
+  "Berkshire & oxfordshire sliproads export (1).geojson",
+  "Camebridge & Bedfordshire slip roads export (1).geojson",
+  "East Anglia export (1).geojson",
+  "East Midlands slip roads export (1).geojson",
+  "Essex slip roads export (1).geojson",
+  "Kent & east Sussex export (1).geojson",
+  "Kent essex export (1).geojson",
+  "London export (1) - Copy.geojson",
+  "London export (1).geojson",
+  "Midlands export (1).geojson",
+  "Norfolk & suffolk slip roads export (1).geojson",
+  "North & south wales slip roads export (1).geojson",
+  "Northeast slip roads export (1).geojson",
+  "Northwest export (1).geojson",
+  "Scotland central belt slip roads .geojson",
+  "Scotland export (1).geojson",
+  "Scotland north slip roads export (1).geojson",
+  "Scotland south slip roads export (1).geojson",
+  "South east junctions export (1).geojson",
+  "South east sliproads export (1).geojson",
+  "South west export (1).geojson",
+  "Surry slip roads export (1).geojson",
+  "Wales export (1).geojson",
+  "West midlands slip roads export (1).geojson",
+  "West sussex and hampshire slip roads export (1).geojson",
+  "Yorkshire northeast export (1).geojson",
+  "Yorkshire slip roads export (1).geojson"
+];
+
+    function loadMarkerCSV() {
+      return new Promise(function (resolve) {
+        document.getElementById("csvMessage").textContent =
+          "Downloading marker-post database...";
+
+        Papa.parse(csvUrl, {
+          download: true,
+          header: true,
+          skipEmptyLines: true,
+
+          complete: function (result) {
+            markerPosts = [];
+
+            result.data.forEach(function (row) {
+              const lat = Number(getField(row, "Latitude"));
+              const lon = Number(getField(row, "Longitude"));
+
+              if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+              if (lat < 49 || lat > 61 || lon < -9 || lon > 3) return;
+
+              const bd = getField(row, "BD");
+              const userFormat = getField(row, "UserFormat");
+
+              markerPosts.push({
+                reference: String(bd || userFormat || "").trim(),
+                road: String(getField(row, "DD") || "").trim(),
+                lat: lat,
+                lon: lon,
+                original: row
+              });
+            });
+
+            document.getElementById("csvMessage").textContent =
+              markerPosts.length.toLocaleString() + " marker posts loaded automatically.";
+
+            setStatus("Marker-post database ready.");
+            resolve(true);
+          },
+
+          error: function (error) {
+            document.getElementById("csvMessage").textContent =
+              "Could not load marker-post database: " + error.message;
+            resolve(false);
+          }
+        });
+      });
+    }
+
+    function processGeoJSON(data, junctionKeys, slipKeys) {
+      const features = data.type === "FeatureCollection"
+        ? data.features
+        : [data];
+
+      const linkTypes = [
+        "motorway_link",
+        "trunk_link",
+        "primary_link",
+        "secondary_link"
+      ];
+
+      features.forEach(function (feature) {
+        if (!feature || !feature.geometry) return;
+
+        const props = feature.properties || {};
+        const highway = String(props.highway || "").toLowerCase();
+        const geometry = feature.geometry;
+
+        if (
+          geometry.type === "Point" &&
+          (highway === "motorway_junction" ||
+           props.junction !== undefined)
+        ) {
+          const coordinates = geometry.coordinates || [];
+          const lon = Number(coordinates[0]);
+          const lat = Number(coordinates[1]);
+
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+          const key = lat.toFixed(6) + "," + lon.toFixed(6);
+
+          if (!junctionKeys.has(key)) {
+            junctionKeys.add(key);
+
+            junctions.push({
+              lat: lat,
+              lon: lon,
+              name: props.name || props.ref || "Unnamed junction",
+              ref: props.ref || "",
+              highway: highway
+            });
+          }
+        }
+
+        if (
+          linkTypes.includes(highway) &&
+          (geometry.type === "LineString" ||
+           geometry.type === "MultiLineString")
+        ) {
+          const paths = geometry.type === "LineString"
+            ? [geometry.coordinates]
+            : geometry.coordinates;
+
+          paths.forEach(function (path) {
+            if (!Array.isArray(path) || path.length < 2) return;
+
+            const key = JSON.stringify(path);
+
+            if (!slipKeys.has(key)) {
+              slipKeys.add(key);
+
+              slipRoads.push({
+                coordinates: path,
+                highway: highway,
+                name: props.name || "",
+                ref: props.ref || ""
+              });
+            }
+          });
+        }
+      });
+    }
+
+    function drawJunctions() {
+      junctionLayer.clearLayers();
+
+      junctions.forEach(function (j) {
+        L.circleMarker([j.lat, j.lon], {
+          radius: 4,
+          color: "#d71920",
+          fillColor: "#d71920",
+          fillOpacity: 0.8
+        })
+        .bindPopup(j.name + (j.ref ? " (" + j.ref + ")" : ""))
+        .addTo(junctionLayer);
+      });
+    }
+
+    async function loadGeoJSONFiles() {
+      junctions = [];
+      slipRoads = [];
+
+      const junctionKeys = new Set();
+      const slipKeys = new Set();
+      let loadedFiles = 0;
+      const failedFiles = [];
+
+      document.getElementById("geoMessage").textContent =
+        "Downloading 27 junction and slip-road files...";
+
+      // Load three files at a time to avoid overwhelming phones and laptops.
+      for (let i = 0; i < geojsonFileNames.length; i += 3) {
+        const batch = geojsonFileNames.slice(i, i + 3);
+
+        const results = await Promise.all(batch.map(async function (fileName) {
+          try {
+            const response = await fetch("../" + encodeURIComponent(fileName));
+
+            if (!response.ok) {
+              throw new Error("HTTP " + response.status);
+            }
+
+            const data = await response.json();
+            processGeoJSON(data, junctionKeys, slipKeys);
+            return true;
+          } catch (error) {
+            console.error("Could not load " + fileName, error);
+            failedFiles.push(fileName);
+            return false;
+          }
+        }));
+
+        loadedFiles += results.filter(Boolean).length;
+
+        document.getElementById("geoMessage").textContent =
+          loadedFiles + " of " + geojsonFileNames.length +
+          " junction and slip-road files loaded...";
+      }
+
+      drawJunctions();
+
+      document.getElementById("geoMessage").textContent =
+        junctions.length.toLocaleString() + " junctions and " +
+        slipRoads.length.toLocaleString() + " slip-road sections loaded from " +
+        loadedFiles + " of " + geojsonFileNames.length + " files.";
+
+      if (failedFiles.length) {
+        document.getElementById("geoMessage").textContent +=
+          " " + failedFiles.length + " file(s) could not be loaded. Check your connection and refresh.";
+
+        return false;
+      }
+
+      return true;
+    }
+
+    async function autoLoadData() {
+      setStatus("Loading your databases automatically. Please wait...");
+
+      const results = await Promise.all([
+        loadMarkerCSV(),
+        loadGeoJSONFiles()
+      ]);
+
+      if (results.every(Boolean)) {
+        setStatus("All marker-post, junction and slip-road data is ready.");
+      } else {
+        setStatus("Some data could not be loaded. Check the messages above and refresh when connected to the internet.");
+      }
+    }
+
+    // --------------------------------------------------
+    // DISTANCE FROM A POINT TO A SLIP-ROAD LINE
+    // --------------------------------------------------
+
+    function pointToSegmentDistance(lat, lon, a, b) {
+      const scale = 111320;
+      const cosLat = Math.cos(lat * Math.PI / 180);
+
+      const px = 0;
+      const py = 0;
+
+      const ax = (a[0] - lon) * scale * cosLat;
+      const ay = (a[1] - lat) * scale;
+
+      const bx = (b[0] - lon) * scale * cosLat;
+      const by = (b[1] - lat) * scale;
+
+      const dx = bx - ax;
+      const dy = by - ay;
+
+      const lengthSquared = dx * dx + dy * dy;
+
+      let t = 0;
+
+      if (lengthSquared > 0) {
+        t = ((px - ax) * dx + (py - ay) * dy) / lengthSquared;
+        t = Math.max(0, Math.min(1, t));
+      }
+
+      const nearestX = ax + t * dx;
+      const nearestY = ay + t * dy;
+
+      return Math.sqrt(nearestX * nearestX + nearestY * nearestY);
+    }
+
+    function distanceToLine(lat, lon, coordinates) {
+      let nearest = Infinity;
+
+      for (let i = 0; i < coordinates.length - 1; i++) {
+        const distance = pointToSegmentDistance(
+          lat,
+          lon,
+          coordinates[i],
+          coordinates[i + 1]
+        );
+
+        if (distance < nearest) nearest = distance;
+      }
+
+      return nearest;
+    }
+
+    // --------------------------------------------------
+    // DISPLAY A SELECTED MARKER POST
+    // --------------------------------------------------
+
+    function showMarker(post) {
+      selectedMarker = post;
+
+      markerLayer.clearLayers();
+      slipLayer.clearLayers();
+
+      L.marker([post.lat, post.lon])
+        .bindPopup(
+          "<b>" + post.reference + "</b><br>" + post.road
+        )
+        .addTo(markerLayer)
+        .openPopup();
+
+      setTimeout(() => showNearby(post), 0);
+    }
+
+    // --------------------------------------------------
+    // FIND NEARBY JUNCTIONS AND SLIP ROADS
+    // --------------------------------------------------
+
+    function showNearby(post) {
+      junctionLayer.eachLayer(function (layer) {
+        if (layer.setStyle) {
+          layer.setStyle({
+            color: "#d71920",
+            fillColor: "#d71920"
+          });
+        }
+      });
+
+      slipLayer.clearLayers();
+
+      const nearbyJunctions = junctions
+        .map(function (j) {
+          return {
+            item: j,
+            distance: distanceMetres(post.lat, post.lon, j.lat, j.lon)
+          };
+        })
+        .filter(x => x.distance <= 5000)
+        .sort((a, b) => a.distance - b.distance);
+
+      const nearbySlips = [];
+
+      slipRoads.forEach(function (road) {
+        const distance = distanceToLine(
+          post.lat,
+          post.lon,
+          road.coordinates
+        );
+
+        if (distance <= 150) {
+          nearbySlips.push({
+            item: road,
+            distance: distance
+          });
+        }
+      });
+
+      nearbySlips.sort((a, b) => a.distance - b.distance);
+
+      nearbySlips.slice(0, 30).forEach(function (entry) {
+        const latlngs = entry.item.coordinates.map(
+          c => [c[1], c[0]]
+        );
+
+        L.polyline(latlngs, {
+          color: "#168a45",
+          weight: 4
+        })
+        .bindPopup(
+          (entry.item.name || entry.item.highway) +
+          "<br>Approximately " + Math.round(entry.distance) + " metres away"
+        )
+        .addTo(slipLayer);
+      });
+
+      const output = document.getElementById("nearby");
+      output.innerHTML = "";
+
+      const heading = document.createElement("p");
+      heading.textContent =
+        nearbyJunctions.length + " junctions within 5 km; " +
+        nearbySlips.length + " slip-road sections within 150 m.";
+      output.appendChild(heading);
+
+      nearbyJunctions.slice(0, 20).forEach(function (entry) {
+        const p = document.createElement("p");
+        p.textContent =
+          entry.item.name +
+          (entry.item.ref ? " (" + entry.item.ref + ")" : "") +
+          " — " + Math.round(entry.distance) + " m away";
+        output.appendChild(p);
+      });
+
+      if (!nearbyJunctions.length) {
+        const p = document.createElement("p");
+        p.textContent = "No junction points found within 5 km.";
+        output.appendChild(p);
+      }
+
+      if (!nearbySlips.length) {
+        const p = document.createElement("p");
+        p.textContent = "No slip-road sections found within 150 m.";
+        output.appendChild(p);
+      }
+    }
+
+    // --------------------------------------------------
+    // SEARCH MARKER POSTS
+    // --------------------------------------------------
+
+    document.getElementById("searchButton").addEventListener("click", function () {
+      if (!markerPosts.length) {
+        setStatus("Please load the marker-post CSV first.");
+        return;
+      }
+
+      const search = normalise(
+        document.getElementById("markerSearch").value
+      );
+
+      const roadSearch = normalise(
+        document.getElementById("roadSearch").value
+      );
+
+      if (!search && !roadSearch) {
+        setStatus("Enter a marker-post reference or road name.");
+        return;
+      }
+
+      let matches = markerPosts.filter(function (post) {
+        const referenceMatches = !search ||
+          normalise(post.reference).includes(search);
+
+        const roadMatches = !roadSearch ||
+          normalise(post.road).includes(roadSearch);
+
+        return referenceMatches && roadMatches;
+      });
+
+      matches = matches.slice(0, 100);
+
+      const results = document.getElementById("results");
+      results.innerHTML = "";
+
+      if (!matches.length) {
+        results.textContent = "No matching marker posts found.";
+        setStatus("No matches found.");
+        return;
+      }
+
+      matches.forEach(function (post) {
+        const item = document.createElement("div");
+        item.className = "result";
+
+        const title = document.createElement("strong");
+        title.textContent = post.reference;
+
+        const details = document.createElement("div");
+        details.textContent =
+          post.road + " — " +
+          post.lat.toFixed(6) + ", " +
+          post.lon.toFixed(6);
+
+        item.appendChild(title);
+        item.appendChild(details);
+
+        const directions = document.createElement("a");
+        directions.textContent = "Get directions in Google Maps";
+        directions.href =
+          "https://www.google.com/maps/dir/?api=1&destination=" +
+          post.lat + "," + post.lon;
+        directions.target = "_blank";
+        directions.rel = "noopener";
+        directions.style.display = "block";
+        directions.style.marginTop = "6px";
+        directions.addEventListener("click", function (event) {
+          event.stopPropagation();
+        });
+
+        item.appendChild(directions);
+
+        item.addEventListener("click", function () {
+          showMarker(post);
+          setStatus("Selected " + post.reference + " on " + post.road);
+        });
+
+        results.appendChild(item);
+      });
+
+      if (matches.length === 1) {
+        showMarker(matches[0]);
+      } else {
+        showMarker(matches[0]);
+
+        matches.slice(1).forEach(function (post) {
+          L.marker([post.lat, post.lon])
+            .bindPopup(
+              "<b>" + post.reference + "</b><br>" + post.road
+            )
+            .addTo(markerLayer);
+        });
+
+        const bounds = L.latLngBounds(
+          matches.map(function (post) {
+            return [post.lat, post.lon];
+          })
+        );
+
+        map.fitBounds(bounds, {
+          padding: [30, 30],
+          maxZoom: 14
+        });
+      }
+
+      setStatus(matches.length + " matching marker posts displayed.");
+    });
+
+    // --------------------------------------------------
+    // GPS: FIND NEAREST MARKER POST
+    // --------------------------------------------------
+
+    document.getElementById("locationButton").addEventListener("click", function () {
+      if (!markerPosts.length) {
+        setStatus("Please load the marker-post CSV first.");
+        return;
+      }
+
+      if (!navigator.geolocation) {
+        setStatus("This browser does not support location services.");
+        return;
+      }
+
+      setStatus("Finding your location...");
+
+      navigator.geolocation.getCurrentPosition(
+        function (position) {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+          const accuracy = Math.round(position.coords.accuracy);
+
+          let nearest = null;
+          let nearestDistance = Infinity;
+
+          markerPosts.forEach(function (post) {
+            const distance = distanceMetres(
+              lat, lon, post.lat, post.lon
+            );
+
+            if (distance < nearestDistance) {
+              nearestDistance = distance;
+              nearest = post;
+            }
+          });
+
+          if (!nearest) {
+            setStatus("No marker posts available.");
+            return;
+          }
+
+          // Display the nearest marker post
+          showMarker(nearest);
+
+          // Display your actual reported location
+          L.circleMarker([lat, lon], {
+            radius: 9,
+            color: "#1769aa",
+            fillColor: "#1769aa",
+            fillOpacity: 1
+          })
+            .bindPopup("Your reported location")
+            .addTo(markerLayer);
+
+          // Zoom to show both locations
+          const bounds = L.latLngBounds(
+            [lat, lon],
+            [nearest.lat, nearest.lon]
+          );
+
+          map.fitBounds(bounds, {
+            padding: [40, 40],
+            maxZoom: 15
+          });
+
+          // Show a warning if the location accuracy is poor
+          let locationWarning = "";
+
+          if (accuracy > 1000) {
+            locationWarning =
+              " WARNING: Your laptop location is very inaccurate.";
+          } else if (accuracy > 100) {
+            locationWarning =
+              " Location accuracy is limited.";
+          }
+
+          setStatus(
+            "Nearest marker: " + nearest.reference +
+            " on " + nearest.road +
+            " — approximately " + Math.round(nearestDistance) +
+            " metres away. Location accuracy estimate: " +
+            accuracy + " metres." + locationWarning
+          );
+        },
+
+        function (error) {
+          setStatus("Could not get your location: " + error.message);
+        },
+
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 30000
+        }
+      );
+    });
+
+    // Start loading both databases as soon as the app opens.
+    autoLoadData();
+
+  </script>
+</body>
+</html>
