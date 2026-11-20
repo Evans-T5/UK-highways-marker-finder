@@ -726,7 +726,7 @@
           normalise(post.reference).includes(search);
 
         const roadMatches = !roadSearch ||
-          normalise(post.road).includes(roadSearch);
+          normalise(post.road) === roadSearch;
 
         return referenceMatches && roadMatches;
       });
