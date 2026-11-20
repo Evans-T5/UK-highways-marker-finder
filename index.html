@@ -694,18 +694,11 @@
             )
             .addTo(markerLayer);
         });
-
-        const bounds = L.latLngBounds(
-          matches.map(function (post) {
-            return [post.lat, post.lon];
-          })
-        );
-
-        map.fitBounds(bounds, {
-          padding: [30, 30],
-          maxZoom: 14
-        });
       }
+
+      // Keep the map focused on the first matching marker,
+      // even when the search returns several partial matches.
+      map.setView([matches[0].lat, matches[0].lon], 15);
 
       setStatus(matches.length + " matching marker posts displayed.");
     });
