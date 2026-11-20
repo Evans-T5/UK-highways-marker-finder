@@ -602,8 +602,8 @@
 
     function tryJunctionSearch(rawSearch, rawRoadSearch) {
       const compact = normalise(rawSearch);
-      const match = compact.match(/^([A-Z]+\\d+)J(\\d+[A-Z]?)$/) ||
-                    compact.match(/^J(\\d+[A-Z]?)$/);
+      const match = compact.match(/^([A-Z]+\d+)J(\d+[A-Z]?)$/) ||
+                    compact.match(/^J(\d+[A-Z]?)$/);
 
       if (!match) return false;
 
