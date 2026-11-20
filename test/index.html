@@ -401,9 +401,7 @@
           " junction and slip-road files loaded...";
       }
 
-      drawJunctions();
-
-      document.getElementById("geoMessage").textContent =
+      // Junction markers are drawn only when a marker post is selected.\n\n      document.getElementById("geoMessage").textContent =
         junctions.length.toLocaleString() + " junctions and " +
         slipRoads.length.toLocaleString() + " slip-road sections loaded from " +
         loadedFiles + " of " + geojsonFileNames.length + " files.";
@@ -510,15 +508,8 @@
     // --------------------------------------------------
 
     function showNearby(post) {
-      junctionLayer.eachLayer(function (layer) {
-        if (layer.setStyle) {
-          layer.setStyle({
-            color: "#d71920",
-            fillColor: "#d71920"
-          });
-        }
-      });
-
+      // Show only junctions close to the selected marker post.
+      junctionLayer.clearLayers();
       slipLayer.clearLayers();
 
       const nearbyJunctions = junctions
@@ -530,6 +521,19 @@
         })
         .filter(x => x.distance <= 5000)
         .sort((a, b) => a.distance - b.distance);
+
+      nearbyJunctions.forEach(function (entry) {
+        const j = entry.item;
+        L.circleMarker([j.lat, j.lon], {
+          radius: 5,
+          color: "#d71920",
+          fillColor: "#d71920",
+          fillOpacity: 0.85
+        })
+        .bindPopup(j.name + (j.ref ? " (" + j.ref + ")" : "") +
+          "<br>Approximately " + Math.round(entry.distance) + " metres away")
+        .addTo(junctionLayer);
+      });
 
       const nearbySlips = [];
 
@@ -723,7 +727,7 @@
 
       let matches = markerPosts.filter(function (post) {
         const referenceMatches = !search ||
-          normalise(post.reference).includes(search);
+          normalise(post.reference) === search;
 
         const roadMatches = !roadSearch ||
           normalise(post.road) === roadSearch;
