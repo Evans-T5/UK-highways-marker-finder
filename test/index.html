@@ -310,6 +310,7 @@
               lon: lon,
               name: props.name || props.ref || "Unnamed junction",
               ref: props.ref || "",
+              junctionTag: props.junction || "",
               highway: highway
             });
           }
@@ -615,37 +616,61 @@
         return true;
       }
 
+      // Junction numbers may be stored as "25", "J25", or in the junction/name tag.
       const matchingJunctions = junctions.filter(function (j) {
-        const ref = normalise(j.ref).replace(/^J/, "");
-        return ref === junctionRef;
+        const values = [j.ref, j.junctionTag, j.name].map(normalise);
+        return values.some(function (value) {
+          if (value === junctionRef || value === "J" + junctionRef) return true;
+          return new RegExp("(?:^|[^A-Z0-9])J?" + junctionRef + "(?:$|[^A-Z0-9])").test(value);
+        });
       });
 
       if (!matchingJunctions.length) {
-        document.getElementById("results").textContent = "No matching junction found for " + road + " J" + junctionRef + ".";
-        setStatus("No junction found. Check the junction number and try again.");
+        document.getElementById("results").textContent =
+          "No junction numbered " + junctionRef + " was found in the loaded map data.";
+        setStatus("No matching junction found. Check that all junction files have loaded.");
         return true;
       }
 
-      const chosen = matchingJunctions[0];
-      const nearbyRoads = slipRoads.map(function (slip) {
-        return { item: slip, distance: distanceToLine(chosen.lat, chosen.lon, slip.coordinates) };
-      }).filter(function (entry) {
-        const ref = normalise(entry.item.ref);
-        const roadMatch = !ref || ref.includes(road);
-        return roadMatch && entry.distance <= 1500;
-      }).sort(function (a, b) { return a.distance - b.distance; });
+      function roadsNear(junction) {
+        return slipRoads.map(function (slip) {
+          const distance = distanceToLine(junction.lat, junction.lon, slip.coordinates);
+          const roadInfo = normalise([slip.ref, slip.name, slip.destinationRef, slip.destination].join(" "));
+          return { item: slip, distance: distance, roadMatch: roadInfo.includes(road) };
+        }).filter(function (entry) {
+          return entry.distance <= 1500;
+        });
+      }
+
+      // The same junction number can occur on several motorways. Prefer
+      // candidates with nearby slip-road features tagged with the requested road.
+      const ranked = matchingJunctions.map(function (junction) {
+        const nearby = roadsNear(junction);
+        const roadSpecific = nearby.filter(function (entry) { return entry.roadMatch; });
+        return {
+          junction: junction,
+          nearby: roadSpecific.length ? roadSpecific : nearby,
+          roadMatches: roadSpecific.length,
+          nearestDistance: nearby.length
+            ? Math.min.apply(null, nearby.map(function (entry) { return entry.distance; }))
+            : Infinity
+        };
+      }).sort(function (a, b) {
+        return b.roadMatches - a.roadMatches || a.nearestDistance - b.nearestDistance;
+      });
+
+      const chosen = ranked[0].junction;
+      const nearbyRoads = ranked[0].nearby.sort(function (a, b) { return a.distance - b.distance; });
 
       markerLayer.clearLayers();
       junctionLayer.clearLayers();
       slipLayer.clearLayers();
 
-      const boundsPoints = [];
-      matchingJunctions.forEach(function (j) {
-        L.circleMarker([j.lat, j.lon], {
-          radius: 8, color: "#d71920", fillColor: "#d71920", fillOpacity: 1, weight: 2
-        }).bindPopup("<b>" + road + " J" + junctionRef + "</b><br>" + j.name).addTo(junctionLayer);
-        boundsPoints.push([j.lat, j.lon]);
-      });
+      const boundsPoints = [[chosen.lat, chosen.lon]];
+      L.circleMarker([chosen.lat, chosen.lon], {
+        radius: 9, color: "#d71920", fillColor: "#d71920", fillOpacity: 1, weight: 2
+      }).bindPopup("<b>" + road + " J" + junctionRef + "</b><br>" + chosen.name)
+        .addTo(junctionLayer);
 
       nearbyRoads.slice(0, 60).forEach(function (entry) {
         const latlngs = entry.item.coordinates.map(function (p) { return [p[1], p[0]]; });
@@ -659,16 +684,18 @@
         map.setView([chosen.lat, chosen.lon], 14);
       }
 
+      const confidence = ranked[0].roadMatches
+        ? ranked[0].roadMatches + " nearby slip-road section(s) tagged " + road
+        : "no nearby slip-road road tag available";
       document.getElementById("results").textContent =
-        road + " J" + junctionRef + " — " + matchingJunctions.length + " junction point(s) found.";
+        road + " J" + junctionRef + " — selected a junction point (" + confidence + ").";
       document.getElementById("nearby").textContent =
-        nearbyRoads.length + " nearby slip-road section(s) displayed (within 1.5 km of the junction).";
-      setStatus("Showing " + road + " J" + junctionRef + " and nearby slip roads.");
+        nearbyRoads.length + " nearby slip-road section(s) displayed within 1.5 km.";
+      setStatus("Showing the best match for " + road + " J" + junctionRef + ".");
       return true;
     }
 
-    // --------------------------------------------------
-    // SEARCH MARKER POSTS
+        // SEARCH MARKER POSTS
     // --------------------------------------------------
 
     document.getElementById("searchButton").addEventListener("click", function () {
