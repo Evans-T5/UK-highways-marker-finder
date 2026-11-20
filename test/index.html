@@ -93,14 +93,14 @@
   </div>
 
   <div class="panel">
-    <h3>3. Find a marker post</h3>
-    <label for="markerSearch">Marker-post reference</label>
-    <input id="markerSearch" type="text" placeholder="Example: M1 P469/B">
+    <h3>3. Search marker posts or junctions</h3>
+    <label for="markerSearch">Search reference</label>
+    <input id="markerSearch" type="text" placeholder="Example: M1 P469/B or M1 J25">
 
     <label for="roadSearch">Road (optional)</label>
     <input id="roadSearch" type="text" placeholder="Example: M1">
 
-    <button id="searchButton">Find marker post</button>
+    <button id="searchButton">Search</button>
     <button id="locationButton">Find my location and nearest marker</button>
 
     <div id="status">Load your CSV database to begin.</div>
@@ -597,10 +597,85 @@
     }
 
     // --------------------------------------------------
+    // SEARCH JUNCTIONS FROM THE MAIN SEARCH BOX
+    // --------------------------------------------------
+
+    function tryJunctionSearch(rawSearch, rawRoadSearch) {
+      const compact = normalise(rawSearch);
+      const match = compact.match(/^([A-Z]+\\d+)J(\\d+[A-Z]?)$/) ||
+                    compact.match(/^J(\\d+[A-Z]?)$/);
+
+      if (!match) return false;
+
+      const road = match.length === 3 ? match[1] : normalise(rawRoadSearch);
+      const junctionRef = match.length === 3 ? match[2] : match[1];
+
+      if (!road) {
+        setStatus("For a junction search, include the motorway, for example M1 J25.");
+        return true;
+      }
+
+      const matchingJunctions = junctions.filter(function (j) {
+        const ref = normalise(j.ref).replace(/^J/, "");
+        return ref === junctionRef;
+      });
+
+      if (!matchingJunctions.length) {
+        document.getElementById("results").textContent = "No matching junction found for " + road + " J" + junctionRef + ".";
+        setStatus("No junction found. Check the junction number and try again.");
+        return true;
+      }
+
+      const chosen = matchingJunctions[0];
+      const nearbyRoads = slipRoads.map(function (slip) {
+        return { item: slip, distance: distanceToLine(chosen.lat, chosen.lon, slip.coordinates) };
+      }).filter(function (entry) {
+        const ref = normalise(entry.item.ref);
+        const roadMatch = !ref || ref.includes(road);
+        return roadMatch && entry.distance <= 1500;
+      }).sort(function (a, b) { return a.distance - b.distance; });
+
+      markerLayer.clearLayers();
+      junctionLayer.clearLayers();
+      slipLayer.clearLayers();
+
+      const boundsPoints = [];
+      matchingJunctions.forEach(function (j) {
+        L.circleMarker([j.lat, j.lon], {
+          radius: 8, color: "#d71920", fillColor: "#d71920", fillOpacity: 1, weight: 2
+        }).bindPopup("<b>" + road + " J" + junctionRef + "</b><br>" + j.name).addTo(junctionLayer);
+        boundsPoints.push([j.lat, j.lon]);
+      });
+
+      nearbyRoads.slice(0, 60).forEach(function (entry) {
+        const latlngs = entry.item.coordinates.map(function (p) { return [p[1], p[0]]; });
+        L.polyline(latlngs, { color: "#168a45", weight: 5 }).addTo(slipLayer);
+        entry.item.coordinates.forEach(function (p) { boundsPoints.push([p[1], p[0]]); });
+      });
+
+      if (boundsPoints.length > 1) {
+        map.fitBounds(L.latLngBounds(boundsPoints), { padding: [35, 35], maxZoom: 15 });
+      } else {
+        map.setView([chosen.lat, chosen.lon], 14);
+      }
+
+      document.getElementById("results").textContent =
+        road + " J" + junctionRef + " — " + matchingJunctions.length + " junction point(s) found.";
+      document.getElementById("nearby").textContent =
+        nearbyRoads.length + " nearby slip-road section(s) displayed (within 1.5 km of the junction).";
+      setStatus("Showing " + road + " J" + junctionRef + " and nearby slip roads.");
+      return true;
+    }
+
+    // --------------------------------------------------
     // SEARCH MARKER POSTS
     // --------------------------------------------------
 
     document.getElementById("searchButton").addEventListener("click", function () {
+      const enteredSearch = document.getElementById("markerSearch").value;
+      const enteredRoad = document.getElementById("roadSearch").value;
+      if (tryJunctionSearch(enteredSearch, enteredRoad)) return;
+
       if (!markerPosts.length) {
         setStatus("Please load the marker-post CSV first.");
         return;
