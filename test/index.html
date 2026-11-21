@@ -721,8 +721,8 @@
 
       document.getElementById("results").textContent =
         road + " J" + junctionRef + " — selected a junction point (" + confidence + ")." +
-        "\\n\\nDIAGNOSTIC — top candidate points:\\n" +
-        diagnosticLines.join("\\n");
+        "\n\nDIAGNOSTIC — top candidate points:\n" +
+        diagnosticLines.join("\n");
       document.getElementById("nearby").textContent =
         nearbyRoads.length + " nearby slip-road section(s) displayed within 1.5 km.";
       setStatus("Showing the best match for " + road + " J" + junctionRef + ".");
