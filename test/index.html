@@ -732,8 +732,8 @@
 
       let matches = markerPosts.filter(function (post) {
         // Accept references with or without the leading P.
-        const storedReference = normalise(post.reference).replace(/^P(?=\\d)/, "");
-        const enteredReference = search.replace(/^P(?=\\d)/, "");
+        const storedReference = normalise(post.reference).replace(/^P(?=\d)/, "");
+        const enteredReference = search.replace(/^P(?=\d)/, "");
         const referenceMatches = !search ||
           storedReference === enteredReference;
 
