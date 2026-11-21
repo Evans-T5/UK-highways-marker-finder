@@ -502,6 +502,9 @@
         .addTo(markerLayer)
         .openPopup();
 
+      // Zoom in on the selected marker post.
+      map.setView([post.lat, post.lon], 15);
+
       setTimeout(() => showNearby(post), 0);
     }
 
