@@ -731,8 +731,11 @@
       }
 
       let matches = markerPosts.filter(function (post) {
+        // Accept references with or without the leading P.
+        const storedReference = normalise(post.reference).replace(/^P(?=\\d)/, "");
+        const enteredReference = search.replace(/^P(?=\\d)/, "");
         const referenceMatches = !search ||
-          normalise(post.reference) === search;
+          storedReference === enteredReference;
 
         const roadMatches = !roadSearch ||
           normalise(post.road) === roadSearch;
