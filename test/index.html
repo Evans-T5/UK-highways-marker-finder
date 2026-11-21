@@ -696,8 +696,33 @@
       const confidence = ranked[0].roadMatches
         ? ranked[0].roadMatches + " nearby slip-road section(s) tagged " + road
         : "no nearby slip-road road tag available";
+
+      // TEMPORARY DIAGNOSTIC: show which numbered-junction candidates
+      // were considered and what nearby slip-road data influenced ranking.
+      const diagnosticLines = ranked.slice(0, 10).map(function (entry, index) {
+        const j = entry.junction;
+        const nearest = entry.nearby.slice()
+          .sort(function (a, b) { return a.distance - b.distance; })
+          .slice(0, 3)
+          .map(function (slip) {
+            const item = slip.item;
+            return (item.ref || item.name || "unnamed slip") +
+              " [" + Math.round(slip.distance) + "m]";
+          }).join("; ");
+        return (index + 1) + ". " + (j.name || "Unnamed") +
+          " | ref=" + (j.ref || "-") +
+          " | junction=" + (j.junctionTag || "-") +
+          " | lat=" + j.lat.toFixed(6) + ", lon=" + j.lon.toFixed(6) +
+          " | " + entry.roadMatches + " " + road + " road-tag matches" +
+          " | nearest=" + (Number.isFinite(entry.nearestDistance)
+            ? Math.round(entry.nearestDistance) + "m" : "none") +
+          " | slips: " + (nearest || "none");
+      });
+
       document.getElementById("results").textContent =
-        road + " J" + junctionRef + " — selected a junction point (" + confidence + ").";
+        road + " J" + junctionRef + " — selected a junction point (" + confidence + ")." +
+        "\\n\\nDIAGNOSTIC — top candidate points:\\n" +
+        diagnosticLines.join("\\n");
       document.getElementById("nearby").textContent =
         nearbyRoads.length + " nearby slip-road section(s) displayed within 1.5 km.";
       setStatus("Showing the best match for " + road + " J" + junctionRef + ".");
