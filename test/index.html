@@ -901,7 +901,10 @@
               " ref=" + (item.ref || "-") +
               " name=" + (item.name || "-") +
               " int_ref=" + (tags.int_ref || "-") +
-              " official_name=" + (tags.official_name || "-");
+              " official_name=" + (tags.official_name || "-") +
+              " destination:ref=" + (tags["destination:ref"] || tags.destination_ref || "-") +
+              " junction:ref=" + (tags["junction:ref"] || "-") +
+              "\\n    ALL SLIP TAGS: " + JSON.stringify(tags).slice(0, 1400);
           }).join("\\n    ");
 
         return (index + 1) + ". " + describePoint(j) +
@@ -921,7 +924,10 @@
             " | ref=" + (item.ref || "-") +
             " | name=" + (item.name || "-") +
             " | int_ref=" + (tags.int_ref || "-") +
-            " | official_name=" + (tags.official_name || "-");
+            " | official_name=" + (tags.official_name || "-") +
+            " | destination:ref=" + (tags["destination:ref"] || tags.destination_ref || "-") +
+            " | junction:ref=" + (tags["junction:ref"] || "-") +
+            "\\n    ALL SLIP TAGS: " + JSON.stringify(tags).slice(0, 1400);
         }).join("\\n") || "None") +
         "\\n\\nTOP NUMBERED CANDIDATES:\\n" + pointDiagnostics.join("\\n\\n");
 
