@@ -825,26 +825,47 @@
         return true;
       }
 
-      const chosenEntry = ranked[0];
+      // Keep every numbered junction point that independently passes the
+      // road-identity checks. At complex interchanges, separate points can
+      // represent the northbound and southbound sides of the same junction.
+      const confirmedEntries = ranked.filter(function (entry) {
+        return entry.roadMatches > 0;
+      });
+      const chosenEntry = confirmedEntries[0];
       const chosen = chosenEntry.junction;
-      const nearbyRoads = chosenEntry.nearby.slice()
-        .sort(function (a, b) { return a.distance - b.distance; });
+      const nearbyRoads = [];
+      const seenSlipFeatures = new Set();
+
+      confirmedEntries.forEach(function (entry) {
+        entry.nearby.forEach(function (slip) {
+          if (!seenSlipFeatures.has(slip.item)) {
+            seenSlipFeatures.add(slip.item);
+            nearbyRoads.push(slip);
+          }
+        });
+      });
+      nearbyRoads.sort(function (a, b) { return a.distance - b.distance; });
 
       markerLayer.clearLayers();
       junctionLayer.clearLayers();
       slipLayer.clearLayers();
 
-      const boundsPoints = [[chosen.lat, chosen.lon]];
-      L.circleMarker([chosen.lat, chosen.lon], {
-        radius: 9,
-        color: "#d71920",
-        fillColor: "#d71920",
-        fillOpacity: 1,
-        weight: 2
-      }).bindPopup("<b>" + road + " J" + junctionRef + "</b><br>" + chosen.name)
-        .addTo(junctionLayer);
+      const boundsPoints = [];
+      confirmedEntries.forEach(function (entry, index) {
+        const j = entry.junction;
+        boundsPoints.push([j.lat, j.lon]);
+        L.circleMarker([j.lat, j.lon], {
+          radius: 9,
+          color: "#d71920",
+          fillColor: "#d71920",
+          fillOpacity: 1,
+          weight: 2
+        }).bindPopup("<b>" + road + " J" + junctionRef +
+          " — point " + (index + 1) + "</b><br>" + (j.name || "Junction"))
+          .addTo(junctionLayer);
+      });
 
-      nearbyRoads.slice(0, 60).forEach(function (entry) {
+      nearbyRoads.slice(0, 100).forEach(function (entry) {
         const latlngs = entry.item.coordinates.map(function (p) {
           return [p[1], p[0]];
         });
@@ -888,7 +909,7 @@
           " | all ref=" + (tags.ref || "-");
       }
 
-      const pointDiagnostics = ranked.slice(0, 5).map(function (entry, index) {
+      const pointDiagnostics = confirmedEntries.map(function (entry, index) {
         const j = entry.junction;
         const slipDetails = entry.nearby.slice()
           .sort(function (a, b) { return a.distance - b.distance; })
@@ -913,30 +934,26 @@
       });
 
       document.getElementById("results").textContent =
-        road + " J" + junctionRef + " — current selection (diagnostic only).\\n\\n" +
-        describePoint(chosen) +
+        road + " J" + junctionRef + " — " + confirmedEntries.length +
+        " junction point(s) passed the road and junction-tag checks.\\n\\n" +
+        "CONFIRMED NUMBERED POINTS:\\n" + pointDiagnostics.join("\\n\\n") +
         "\\n\\nNearby slip-road sections counted as " + road + ":\\n" +
-        (nearbyRoads.slice(0, 8).map(function (entry) {
+        (nearbyRoads.slice(0, 12).map(function (entry) {
           const item = entry.item;
           const tags = item.tags || {};
           return (item.name || item.ref || item.highway || "unnamed") +
             " [" + Math.round(entry.distance) + "m]" +
-            " | ref=" + (item.ref || "-") +
-            " | name=" + (item.name || "-") +
-            " | int_ref=" + (tags.int_ref || "-") +
-            " | official_name=" + (tags.official_name || "-") +
             " | destination:ref=" + (tags["destination:ref"] || tags.destination_ref || "-") +
             " | junction:ref=" + (tags["junction:ref"] || "-") +
             "\\n    ALL SLIP TAGS: " + JSON.stringify(tags).slice(0, 1400);
-        }).join("\\n") || "None") +
-        "\\n\\nTOP NUMBERED CANDIDATES:\\n" + pointDiagnostics.join("\\n\\n");
+        }).join("\\n") || "None");
 
       document.getElementById("nearby").textContent =
-        "Diagnostic only: " + nearbyRoads.length +
-        " nearby slip-road sections were counted as " + road +
-        ". Do not rely on this junction result yet.";
-      setStatus("Diagnostic selection shown for " + road + " J" + junctionRef +
-        " — not confirmed as correct.");
+        confirmedEntries.length + " numbered junction points passed the road and junction-tag checks. " +
+        nearbyRoads.length + " matching slip-road sections are highlighted. " +
+        "The map is fitted around all matching points.";
+      setStatus(road + " J" + junctionRef + ": " + confirmedEntries.length +
+        " junction points matched the loaded road-network tags.");
       return true;
     }
 
