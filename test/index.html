@@ -691,9 +691,7 @@
 
       function slipHasRoadTag(slip) {
         const tags = slip.tags || {};
-        // Only use tags that identify the slip road itself.
-        // Destination tags describe where traffic is going, not which road
-        // the slip road belongs to, and can cause false motorway matches.
+        // Direct identity tags are the strongest evidence.
         const roadFields = [
           slip.ref,
           slip.name,
@@ -705,19 +703,43 @@
         return roadFields.some(hasRequestedRoad);
       }
 
+      function slipHasDestinationRoadTag(slip) {
+        const tags = slip.tags || {};
+        // Destination refs are not accepted on their own. They can help only
+        // when a nearby slip also carries the exact requested junction:ref.
+        return [
+          slip.destinationRef,
+          tags["destination:ref"],
+          tags.destination_ref
+        ].some(hasRequestedRoad);
+      }
+
+      function slipHasRequestedJunctionRef(slip) {
+        const tags = slip.tags || {};
+        return normalise(tags["junction:ref"]) === junctionRef;
+      }
+
       const ranked = matchingJunctions.map(function (junction) {
         const nearby = slipRoads.map(function (slip) {
           return {
             item: slip,
             distance: distanceToLine(junction.lat, junction.lon, slip.coordinates),
-            roadMatch: slipHasRoadTag(slip)
+            roadMatch: slipHasRoadTag(slip),
+            destinationRoadMatch: slipHasDestinationRoadTag(slip),
+            junctionRefMatch: slipHasRequestedJunctionRef(slip)
           };
         }).filter(function (entry) {
           return entry.distance <= 1500;
         });
 
+        // A destination ref can corroborate the motorway only when a separate
+        // nearby slip explicitly identifies this same junction number.
+        const hasNearbyJunctionRef = nearby.some(function (entry) {
+          return entry.junctionRefMatch && entry.distance <= 150;
+        });
         const roadSpecific = nearby.filter(function (entry) {
-          return entry.roadMatch;
+          return entry.roadMatch ||
+            (hasNearbyJunctionRef && entry.destinationRoadMatch && entry.distance <= 150);
         });
 
         return {
