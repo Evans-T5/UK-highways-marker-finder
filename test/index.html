@@ -654,9 +654,33 @@
       });
 
       if (!matchingJunctions.length) {
+        const exactRefCount = junctions.filter(function (j) {
+          return normalise(j.ref) === junctionRef ||
+            normalise(j.junctionTag) === junctionRef ||
+            normalise((j.tags || {})["junction:ref"]) === junctionRef ||
+            normalise((j.tags || {}).ref) === junctionRef;
+        }).length;
+        const refExamples = junctions
+          .filter(function (j) {
+            return normalise(j.ref) === junctionRef ||
+              normalise(j.junctionTag) === junctionRef ||
+              normalise((j.tags || {})["junction:ref"]) === junctionRef ||
+              normalise((j.tags || {}).ref) === junctionRef;
+          })
+          .slice(0, 5)
+          .map(function (j) {
+            return (j.name || "Unnamed") + " ref=" + (j.ref || "-") +
+              " at " + j.lat.toFixed(6) + ", " + j.lon.toFixed(6);
+          });
         document.getElementById("results").textContent =
-          "No junction numbered " + junctionRef + " was found in the loaded map data.";
-        setStatus("No matching junction found. Check that all junction files have loaded.");
+          "No junction numbered " + junctionRef + " was found in the loaded map data.\\n" +
+          "SEARCH DIAGNOSTIC: entered=" + rawSearch +
+          " | parsed road=" + road +
+          " | parsed junction=" + junctionRef +
+          " | junction points loaded=" + junctions.length +
+          " | exact ref/tag matches=" + exactRefCount +
+          (refExamples.length ? "\\nExamples: " + refExamples.join("; ") : "");
+        setStatus("Search diagnostic shown. No map location has been selected.");
         return true;
       }
 
