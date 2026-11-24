@@ -667,18 +667,14 @@
 
       function slipHasRoadTag(slip) {
         const tags = slip.tags || {};
+        // Only use tags that identify the slip road itself.
+        // Destination tags describe where traffic is going, not which road
+        // the slip road belongs to, and can cause false motorway matches.
         const roadFields = [
           slip.ref,
           slip.name,
-          slip.destinationRef,
-          slip.destination,
           tags.ref,
           tags.name,
-          tags["destination:ref"],
-          tags.destination,
-          tags.network,
-          tags.operator,
-          tags.route,
           tags.int_ref,
           tags.official_name
         ];
