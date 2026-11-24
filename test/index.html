@@ -733,14 +733,24 @@
           return entry.distance <= 1500;
         });
 
+        // Keep the evidence radius tight. A motorway passing within 1.5 km
+        // of an unrelated junction point is not proof that the point belongs
+        // to that motorway. Direct road identity must be within 150 metres.
+        const MAX_CONFIRMATION_DISTANCE = 150;
+
         // A destination ref can corroborate the motorway only when a separate
-        // nearby slip explicitly identifies this same junction number.
+        // nearby slip explicitly identifies this exact junction number.
         const hasNearbyJunctionRef = nearby.some(function (entry) {
-          return entry.junctionRefMatch && entry.distance <= 150;
+          return entry.junctionRefMatch &&
+            entry.distance <= MAX_CONFIRMATION_DISTANCE;
         });
+
         const roadSpecific = nearby.filter(function (entry) {
-          return entry.roadMatch ||
-            (hasNearbyJunctionRef && entry.destinationRoadMatch && entry.distance <= 150);
+          const closeEnough = entry.distance <= MAX_CONFIRMATION_DISTANCE;
+          return closeEnough && (
+            entry.roadMatch ||
+            (hasNearbyJunctionRef && entry.destinationRoadMatch)
+          );
         });
 
         return {
@@ -748,8 +758,8 @@
           nearby: roadSpecific,
           allNearby: nearby,
           roadMatches: roadSpecific.length,
-          nearestDistance: nearby.length
-            ? Math.min.apply(null, nearby.map(function (entry) { return entry.distance; }))
+          nearestDistance: roadSpecific.length
+            ? Math.min.apply(null, roadSpecific.map(function (entry) { return entry.distance; }))
             : Infinity
         };
       }).sort(function (a, b) {
