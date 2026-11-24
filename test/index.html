@@ -769,7 +769,12 @@
               const tags = item.tags || {};
               const label = item.ref || item.name ||
                 tags["destination:ref"] || tags.destination || item.highway || "unnamed slip";
-              return label + " [" + Math.round(slip.distance) + "m]";
+              return label + " [" + Math.round(slip.distance) + "m]" +
+                " {road=" + slip.roadMatch +
+                ", destination=" + slip.destinationRoadMatch +
+                ", junctionRef=" + slip.junctionRefMatch +
+                ", destinationAccepted=" +
+                (slip.destinationRoadMatch && slip.distance <= 150) + "}";
             }).join("; ");
 
           let detail = (index + 1) + ". " + (j.name || "Unnamed") +
