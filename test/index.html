@@ -634,8 +634,7 @@
         const text = normalise(value);
         if (!text) return false;
         if (text === junctionRef || text === "J" + junctionRef) return true;
-        const escaped = junctionRef.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&");
-        return new RegExp("(^|[^A-Z0-9])J?" + escaped + "($|[^A-Z0-9])").test(text);
+        return new RegExp("(^|[^A-Z0-9])J?" + junctionRef + "($|[^A-Z0-9])").test(text);
       }
 
       const matchingJunctions = junctions.filter(function (j) {
@@ -662,8 +661,7 @@
 
       function hasRequestedRoad(value) {
         const text = String(value || "").toUpperCase();
-        const escapedRoad = road.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&");
-        return new RegExp("(^|[^A-Z0-9])" + escapedRoad + "($|[^A-Z0-9])").test(text);
+        return text.split(/[^A-Z0-9]+/).includes(road);
       }
 
       function slipHasRoadTag(slip) {
