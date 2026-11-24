@@ -785,14 +785,74 @@
         map.setView([chosen.lat, chosen.lon], 14);
       }
 
+      function describePoint(j) {
+        const tags = j.tags || {};
+        const fields = [
+          ["ref", j.ref],
+          ["junctionTag", j.junctionTag],
+          ["name", j.name],
+          ["junction:ref", tags["junction:ref"]],
+          ["tag ref", tags.ref],
+          ["tag name", tags.name],
+          ["official_name", tags.official_name],
+          ["description", tags.description]
+        ];
+        const matched = fields.filter(function (field) {
+          return containsJunctionNumber(field[1]);
+        }).map(function (field) {
+          return field[0] + "=" + String(field[1]);
+        });
+        return "Point: " + (j.name || "Unnamed") +
+          " | coordinates=" + j.lat.toFixed(6) + ", " + j.lon.toFixed(6) +
+          " | matched number in: " + (matched.join("; ") || "not identified") +
+          " | highway=" + (tags.highway || j.highway || "-") +
+          " | junction=" + (tags.junction || "-") +
+          " | all ref=" + (tags.ref || "-");
+      }
+
+      const pointDiagnostics = ranked.slice(0, 5).map(function (entry, index) {
+        const j = entry.junction;
+        const slipDetails = entry.nearby.slice()
+          .sort(function (a, b) { return a.distance - b.distance; })
+          .slice(0, 5)
+          .map(function (slip) {
+            const item = slip.item;
+            const tags = item.tags || {};
+            return (item.name || item.ref || item.highway || "unnamed") +
+              " [" + Math.round(slip.distance) + "m]" +
+              " ref=" + (item.ref || "-") +
+              " name=" + (item.name || "-") +
+              " int_ref=" + (tags.int_ref || "-") +
+              " official_name=" + (tags.official_name || "-");
+          }).join("\\n    ");
+
+        return (index + 1) + ". " + describePoint(j) +
+          " | matching slip sections=" + entry.roadMatches +
+          "\\n    " + (slipDetails || "No matching slip details");
+      });
+
       document.getElementById("results").textContent =
-        road + " J" + junctionRef + " — verified using " +
-        chosenEntry.roadMatches + " nearby slip-road section(s) tagged " + road + ".";
+        road + " J" + junctionRef + " — current selection (diagnostic only).\\n\\n" +
+        describePoint(chosen) +
+        "\\n\\nNearby slip-road sections counted as " + road + ":\\n" +
+        (nearbyRoads.slice(0, 8).map(function (entry) {
+          const item = entry.item;
+          const tags = item.tags || {};
+          return (item.name || item.ref || item.highway || "unnamed") +
+            " [" + Math.round(entry.distance) + "m]" +
+            " | ref=" + (item.ref || "-") +
+            " | name=" + (item.name || "-") +
+            " | int_ref=" + (tags.int_ref || "-") +
+            " | official_name=" + (tags.official_name || "-");
+        }).join("\\n") || "None") +
+        "\\n\\nTOP NUMBERED CANDIDATES:\\n" + pointDiagnostics.join("\\n\\n");
 
       document.getElementById("nearby").textContent =
-        nearbyRoads.length + " matching " + road +
-        " slip-road section(s) displayed within 1.5 km.";
-      setStatus("Showing the verified match for " + road + " J" + junctionRef + ".");
+        "Diagnostic only: " + nearbyRoads.length +
+        " nearby slip-road sections were counted as " + road +
+        ". Do not rely on this junction result yet.";
+      setStatus("Diagnostic selection shown for " + road + " J" + junctionRef +
+        " — not confirmed as correct.");
       return true;
     }
 
