@@ -631,10 +631,11 @@
       }
 
       function containsJunctionNumber(value) {
-        const text = normalise(value);
-        if (!text) return false;
-        if (text === junctionRef || text === "J" + junctionRef) return true;
-        return new RegExp("(^|[^A-Z0-9])J?" + junctionRef + "($|[^A-Z0-9])").test(text);
+        const raw = String(value || "").trim().toUpperCase();
+        const compact = normalise(raw);
+        if (!raw) return false;
+        if (compact === junctionRef || compact === "J" + junctionRef) return true;
+        return new RegExp("(^|[^A-Z0-9])J?" + junctionRef + "($|[^A-Z0-9])").test(raw);
       }
 
       const matchingJunctions = junctions.filter(function (j) {
