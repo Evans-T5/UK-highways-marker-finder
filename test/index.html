@@ -726,11 +726,27 @@
               return label + " [" + Math.round(slip.distance) + "m]";
             }).join("; ");
 
-          return (index + 1) + ". " + (j.name || "Unnamed") +
+          let detail = (index + 1) + ". " + (j.name || "Unnamed") +
             " | ref=" + (j.ref || "-") +
             " | lat=" + j.lat.toFixed(6) + ", lon=" + j.lon.toFixed(6) +
             " | no " + road + " road-tag match" +
             " | nearby slips: " + (nearest || "none");
+
+          // Extra tag detail for the likely M1 J27 candidates (items 5-7).
+          if (index >= 4 && index <= 6) {
+            const junctionTags = JSON.stringify(j.tags || {});
+            detail += "\\n   JUNCTION TAGS: " + junctionTags.slice(0, 900);
+            entry.allNearby.slice()
+              .sort(function (a, b) { return a.distance - b.distance; })
+              .slice(0, 3)
+              .forEach(function (slip, slipIndex) {
+                const item = slip.item;
+                detail += "\\n   SLIP " + (slipIndex + 1) +
+                  " (" + Math.round(slip.distance) + "m) TAGS: " +
+                  JSON.stringify(item.tags || {}).slice(0, 900);
+              });
+          }
+          return detail;
         });
 
         document.getElementById("results").textContent =
