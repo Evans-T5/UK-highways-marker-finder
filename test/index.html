@@ -664,7 +664,7 @@
       // STAGE 2: associate numbered points with the requested motorway using
       // the independent marker-post database, not slip-road direction/name tags.
       // This avoids accepting every J23 point across the UK as M6 J23.
-      const MAX_MARKER_POST_DISTANCE = 1500;
+      const MAX_MARKER_POST_DISTANCE = 300;
       const ranked = numberedCandidates.map(function (junction) {
         let nearestPost = null;
         let nearestPostDistance = Infinity;
