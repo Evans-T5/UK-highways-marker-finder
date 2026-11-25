@@ -683,6 +683,11 @@
     // SEARCH JUNCTIONS FROM THE MAIN SEARCH BOX
     // --------------------------------------------------
 
+    function getMarkerPostCarriageway(post) {
+      const match = normalise(post.reference).match(/([ABJKLM])$/);
+      return match ? match[1] : "";
+    }
+
     function tryJunctionSearch(rawSearch, rawRoadSearch) {
       const compact = normalise(rawSearch);
       const match = compact.match(/^([A-Z]+\d+)J(\d+[A-Z]?)$/) ||
@@ -736,15 +741,23 @@
       const ranked = numberedCandidates.map(function (junction) {
         let nearestPost = null;
         let nearestPostDistance = Infinity;
+        let nearestSlipPost = null;
+        let nearestSlipPostDistance = Infinity;
 
         markerPosts.forEach(function (post) {
           if (normalise(post.road) !== road) return;
+          const carriageway = getMarkerPostCarriageway(post);
           const distance = distanceMetres(
             junction.lat, junction.lon, post.lat, post.lon
           );
-          if (distance < nearestPostDistance) {
+          if ((carriageway === "A" || carriageway === "B") &&
+              distance < nearestPostDistance) {
             nearestPostDistance = distance;
             nearestPost = post;
+          } else if (["J", "K", "L", "M"].includes(carriageway) &&
+                     distance < nearestSlipPostDistance) {
+            nearestSlipPostDistance = distance;
+            nearestSlipPost = post;
           }
         });
 
@@ -772,12 +785,13 @@
           junction: junction,
           nearestPost: nearestPost,
           markerPostDistance: nearestPostDistance,
+          nearestSlipPost: nearestSlipPost,
+          slipPostDistance: nearestSlipPostDistance,
           nearestMainline: nearestMainline,
           mainlineDistance: mainlineDistance
         };
       }).sort(function (a, b) {
-        // Rank candidates by the strongest independent location evidence:
-        // either a matching-road marker post or a matching mapped mainline.
+        // Rank using A/B mainline posts or matching mainline geometry.
         return Math.min(a.markerPostDistance, a.mainlineDistance) -
                Math.min(b.markerPostDistance, b.mainlineDistance);
       });
@@ -832,10 +846,13 @@
           const j = entry.junction;
           return (index + 1) + ". " + (j.name || "Unnamed junction") +
             " | point=" + j.lat.toFixed(6) + ", " + j.lon.toFixed(6) +
-            " | nearest " + road + " marker post=" +
+            " | A/B MP=" +
             (Number.isFinite(entry.markerPostDistance)
-              ? Math.round(entry.markerPostDistance) + "m (" +
-                entry.nearestPost.reference + ")"
+              ? Math.round(entry.markerPostDistance) + "m (" + entry.nearestPost.reference + ")"
+              : "not found") +
+            " | J/K/L/M slip MP=" +
+            (Number.isFinite(entry.slipPostDistance)
+              ? Math.round(entry.slipPostDistance) + "m (" + entry.nearestSlipPost.reference + ")"
               : "not found") +
             " | nearest matching mainline=" +
             (Number.isFinite(entry.mainlineDistance)
@@ -846,9 +863,9 @@
 
         document.getElementById("results").textContent =
           road + " J" + junctionRef +
-          " — numbered points were found, but none was close enough to a " +
-          road + " marker post to identify it safely.\n\n" +
-          "Candidate checks (maximum " + MAX_MARKER_POST_DISTANCE + "m):\n" +
+          " — points found, but no A/B mainline post within " +
+          MAX_MARKER_POST_DISTANCE + "m or matching mainline geometry within " +
+          MAX_MAINLINE_DISTANCE + "m.\n\nCandidate checks:\n" +
           diagnostic;
         document.getElementById("nearby").textContent =
           "No junction has been selected. The motorway could not be independently confirmed.";
@@ -899,7 +916,7 @@
         }).bindPopup(
           "<b>" + road + " J" + junctionRef + " — point " +
           (index + 1) + "</b><br>" + (j.name || "Junction") +
-          "<br>Nearest " + road + " marker post: " +
+          "<br>Nearest " + road + " A/B mainline post: " +
           (entry.nearestPost
             ? Math.round(entry.markerPostDistance) + "m"
             : "not found") +
@@ -959,10 +976,13 @@
         );
         return (index + 1) + ". " + (j.name || "Unnamed junction") +
           " | coordinates=" + j.lat.toFixed(6) + ", " + j.lon.toFixed(6) +
-          " | nearest " + road + " marker post=" +
+          " | A/B MP=" +
           (entry.nearestPost
-            ? Math.round(entry.markerPostDistance) + "m (" +
-              entry.nearestPost.reference + ")"
+            ? Math.round(entry.markerPostDistance) + "m (" + entry.nearestPost.reference + ")"
+            : "not found") +
+          " | J/K/L/M slip MP=" +
+          (entry.nearestSlipPost
+            ? Math.round(entry.slipPostDistance) + "m (" + entry.nearestSlipPost.reference + ")"
             : "not found") +
           " | mapped mainline=" +
           (entry.nearestMainline
@@ -990,10 +1010,10 @@
 
       document.getElementById("results").textContent =
         road + " J" + junctionRef + " — " + confirmedEntries.length +
-        " numbered junction point(s) confirmed in the best-supported local group (within " +
-        (MAX_JUNCTION_CLUSTER_DISTANCE / 1000) + "km) using either a marker post within " +
-        MAX_MARKER_POST_DISTANCE + "m or mapped mainline geometry within " +
-        MAX_MAINLINE_DISTANCE + "m. The marker-post limit remains unchanged.\n\n" +
+        " numbered point(s) confirmed (cluster within " +
+        (MAX_JUNCTION_CLUSTER_DISTANCE / 1000) + "km) by either an A/B mainline post within " +
+        MAX_MARKER_POST_DISTANCE + "m or matching mainline within " +
+        MAX_MAINLINE_DISTANCE + "m. J/K/L/M slip posts are listed separately.\n\n" +
         "NUMBERED JUNCTION POINTS:\n" + pointDiagnostics.join("\n") +
         "\n\nNearby link geometries (within " + MAX_NEARBY_SLIP_DISTANCE +
         "m; displayed without requiring direction or road-name tags):\n" +
@@ -1007,7 +1027,7 @@
         "All links are proximity candidates and still require physical-connection checking.";
       setStatus(
         road + " J" + junctionRef + ": " + confirmedEntries.length +
-        " junction point(s) confirmed by marker posts or mapped mainline; " +
+        " junction point(s) confirmed by A/B mainline posts or mapped mainline; " +
         nearbyRoads.length + " nearby links displayed."
       );
       return true;
