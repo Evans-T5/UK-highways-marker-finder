@@ -732,6 +732,7 @@
       // the independent marker-post database, not slip-road direction/name tags.
       // This avoids accepting every J23 point across the UK as M6 J23.
       const MAX_MARKER_POST_DISTANCE = 300;
+      const MAX_MAINLINE_DISTANCE = 100;
       const ranked = numberedCandidates.map(function (junction) {
         let nearestPost = null;
         let nearestPostDistance = Infinity;
@@ -747,17 +748,47 @@
           }
         });
 
+        // The M25 route is designated A282 across the Dartford Crossing.
+        // Accept either exact mainline ref only for this M25/A282 pilot.
+        let nearestMainline = null;
+        let mainlineDistance = Infinity;
+        mainlineRoads.forEach(function (line) {
+          const lineRef = normalise(line.ref);
+          const belongsToRequestedRoad =
+            lineRef === road ||
+            (road === "M25" && lineRef === "A282");
+          if (!belongsToRequestedRoad) return;
+
+          const distance = distanceToLine(
+            junction.lat, junction.lon, line.coordinates
+          );
+          if (distance < mainlineDistance) {
+            mainlineDistance = distance;
+            nearestMainline = line;
+          }
+        });
+
         return {
           junction: junction,
           nearestPost: nearestPost,
-          markerPostDistance: nearestPostDistance
+          markerPostDistance: nearestPostDistance,
+          nearestMainline: nearestMainline,
+          mainlineDistance: mainlineDistance
         };
       }).sort(function (a, b) {
+        // Keep the existing marker-post ranking; mainline is an independent
+        // confirmation path, not a change to the 300m marker-post limit.
         return a.markerPostDistance - b.markerPostDistance;
       });
 
       const confirmedEntries = ranked.filter(function (entry) {
-        return entry.nearestPost && entry.markerPostDistance <= MAX_MARKER_POST_DISTANCE;
+        const markerPostConfirmed =
+          entry.nearestPost &&
+          entry.markerPostDistance <= MAX_MARKER_POST_DISTANCE;
+        const mainlineConfirmed =
+          entry.nearestMainline &&
+          entry.mainlineDistance <= MAX_MAINLINE_DISTANCE;
+        return markerPostConfirmed || mainlineConfirmed;
       });
 
       if (!confirmedEntries.length) {
@@ -769,6 +800,11 @@
             (Number.isFinite(entry.markerPostDistance)
               ? Math.round(entry.markerPostDistance) + "m (" +
                 entry.nearestPost.reference + ")"
+              : "not found") +
+            " | nearest matching mainline=" +
+            (Number.isFinite(entry.mainlineDistance)
+              ? Math.round(entry.mainlineDistance) + "m (" +
+                (entry.nearestMainline.ref || entry.nearestMainline.name || "unnamed") + ")"
               : "not found");
         }).join("\n");
 
@@ -885,8 +921,9 @@
 
       document.getElementById("results").textContent =
         road + " J" + junctionRef + " — " + confirmedEntries.length +
-        " numbered junction point(s) associated with " + road +
-        " using the marker-post database.\n\n" +
+        " numbered junction point(s) confirmed using either a marker post within " +
+        MAX_MARKER_POST_DISTANCE + "m or mapped mainline geometry within " +
+        MAX_MAINLINE_DISTANCE + "m. The marker-post limit remains unchanged.\n\n" +
         "NUMBERED JUNCTION POINTS:\n" + pointDiagnostics.join("\n") +
         "\n\nNearby link geometries (within " + MAX_NEARBY_SLIP_DISTANCE +
         "m; displayed without requiring direction or road-name tags):\n" +
@@ -899,8 +936,8 @@
         "their physical connection should be checked on the map.";
       setStatus(
         road + " J" + junctionRef + ": " + confirmedEntries.length +
-        " junction point(s) found using nearby " + road +
-        " marker posts; " + nearbyRoads.length + " nearby links displayed."
+        " junction point(s) confirmed by marker posts or mapped mainline; " +
+        nearbyRoads.length + " nearby links displayed."
       );
       return true;
     }
