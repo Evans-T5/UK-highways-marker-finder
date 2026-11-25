@@ -130,6 +130,7 @@
 
   frame.addEventListener("load", () => {
     state.textContent = "Test app opened. Waiting for the databases...";
+    runAll();
   });
   document.getElementById("run").addEventListener("click", runAll);
 })();
