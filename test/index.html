@@ -161,6 +161,20 @@
       document.getElementById("status").textContent = message;
     }
 
+    // Clear the previous search before starting a new one.
+    function clearPreviousSearch() {
+      markerLayer.clearLayers();
+      junctionLayer.clearLayers();
+      slipLayer.clearLayers();
+      selectedMarker = null;
+
+      document.getElementById("results").textContent = "Searching...";
+      document.getElementById("nearby").textContent =
+        "Waiting for the new search results...";
+
+      map.setView([53.5, -2.5], 6);
+    }
+
     function normalise(value) {
       return String(value || "").trim().toUpperCase().replace(/\s+/g, "");
     }
@@ -842,6 +856,8 @@
     // --------------------------------------------------
 
     document.getElementById("searchButton").addEventListener("click", function () {
+      clearPreviousSearch();
+
       const enteredSearch = document.getElementById("markerSearch").value;
       const enteredRoad = document.getElementById("roadSearch").value;
       if (tryJunctionSearch(enteredSearch, enteredRoad)) return;
@@ -960,6 +976,8 @@
     // --------------------------------------------------
 
     document.getElementById("locationButton").addEventListener("click", function () {
+      clearPreviousSearch();
+
       if (!markerPosts.length) {
         setStatus("Please load the marker-post CSV first.");
         return;
