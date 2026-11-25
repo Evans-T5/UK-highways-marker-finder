@@ -864,7 +864,14 @@
           "<b>" + road + " J" + junctionRef + " — point " +
           (index + 1) + "</b><br>" + (j.name || "Junction") +
           "<br>Nearest " + road + " marker post: " +
-          Math.round(entry.markerPostDistance) + "m"
+          (entry.nearestPost
+            ? Math.round(entry.markerPostDistance) + "m"
+            : "not found") +
+          (entry.nearestMainline
+            ? "<br>Mapped mainline: " +
+              (entry.nearestMainline.ref || entry.nearestMainline.name || "unnamed") +
+              " (" + Math.round(entry.mainlineDistance) + "m)"
+            : "")
         ).addTo(junctionLayer);
       });
 
@@ -902,8 +909,15 @@
         return (index + 1) + ". " + (j.name || "Unnamed junction") +
           " | coordinates=" + j.lat.toFixed(6) + ", " + j.lon.toFixed(6) +
           " | nearest " + road + " marker post=" +
-          Math.round(entry.markerPostDistance) + "m (" +
-          entry.nearestPost.reference + ")" +
+          (entry.nearestPost
+            ? Math.round(entry.markerPostDistance) + "m (" +
+              entry.nearestPost.reference + ")"
+            : "not found") +
+          " | mapped mainline=" +
+          (entry.nearestMainline
+            ? (entry.nearestMainline.ref || entry.nearestMainline.name || "unnamed") +
+              " at " + Math.round(entry.mainlineDistance) + "m"
+            : "not confirmed") +
           " | point ref=" + (j.ref || "-") +
           " | junction:ref=" + (tags["junction:ref"] || "-");
       });
