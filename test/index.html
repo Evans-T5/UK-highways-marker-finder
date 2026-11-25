@@ -736,7 +736,7 @@
       // STAGE 2: associate numbered points with the requested motorway using
       // the independent marker-post database, not slip-road direction/name tags.
       // This avoids accepting every J23 point across the UK as M6 J23.
-      const MAX_MARKER_POST_DISTANCE = 300;
+      const MAX_MAINLINE_MARKER_POST_DISTANCE = 300;
       const MAX_MAINLINE_DISTANCE = 100;
       const ranked = numberedCandidates.map(function (junction) {
         let nearestPost = null;
@@ -796,14 +796,9 @@
                Math.min(b.markerPostDistance, b.mainlineDistance);
       });
 
-      // A junction number can occur in unrelated map features elsewhere in
-      // the UK (for example, M6 J6 also picked up points at Orrell).
-      // Keep only the local group around the best-supported candidate.
-      // Five kilometres allows a large interchange to span several km while
-      // preventing a distant same-number point from being treated as this junction.
+      // Limit same-number points to 5 km around the strongest supported point.
       const MAX_JUNCTION_CLUSTER_DISTANCE = 5000;
-      // Do not build a local group around an arbitrary point if no candidate
-      // has any finite evidence from the requested motorway.
+      // Do not group candidates without independent motorway evidence.
       const evidenceRanked = ranked.filter(function (entry) {
         return Number.isFinite(entry.markerPostDistance) ||
                Number.isFinite(entry.mainlineDistance);
@@ -834,7 +829,7 @@
       const confirmedEntries = localRanked.filter(function (entry) {
         const markerPostConfirmed =
           entry.nearestPost &&
-          entry.markerPostDistance <= MAX_MARKER_POST_DISTANCE;
+          entry.markerPostDistance <= MAX_MAINLINE_MARKER_POST_DISTANCE;
         const mainlineConfirmed =
           entry.nearestMainline &&
           entry.mainlineDistance <= MAX_MAINLINE_DISTANCE;
@@ -863,9 +858,10 @@
 
         document.getElementById("results").textContent =
           road + " J" + junctionRef +
-          " — points found, but no A/B mainline post within " +
-          MAX_MARKER_POST_DISTANCE + "m or matching mainline geometry within " +
-          MAX_MAINLINE_DISTANCE + "m.\n\nCandidate checks:\n" +
+          " — numbered points were found, but none was close enough to an " +
+          road + " A/B mainline post within " + MAX_MAINLINE_MARKER_POST_DISTANCE +
+          "m or matching mainline geometry within " + MAX_MAINLINE_DISTANCE +
+          "m to confirm safely.\n\nCandidate checks:\n" +
           diagnostic;
         document.getElementById("nearby").textContent =
           "No junction has been selected. The motorway could not be independently confirmed.";
@@ -1012,7 +1008,7 @@
         road + " J" + junctionRef + " — " + confirmedEntries.length +
         " numbered point(s) confirmed (cluster within " +
         (MAX_JUNCTION_CLUSTER_DISTANCE / 1000) + "km) by either an A/B mainline post within " +
-        MAX_MARKER_POST_DISTANCE + "m or matching mainline within " +
+        MAX_MAINLINE_MARKER_POST_DISTANCE + "m or matching mainline within " +
         MAX_MAINLINE_DISTANCE + "m. J/K/L/M slip posts are listed separately.\n\n" +
         "NUMBERED JUNCTION POINTS:\n" + pointDiagnostics.join("\n") +
         "\n\nNearby link geometries (within " + MAX_NEARBY_SLIP_DISTANCE +
