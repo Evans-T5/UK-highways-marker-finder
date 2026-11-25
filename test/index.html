@@ -971,7 +971,8 @@
             : "not confirmed") +
           " | candidate offset=" + Math.round(candidateOffset) + "m" +
           " | point highway=" + (tags.highway || "-") +
-          " | point road ref=" + (tags.ref || "-") +
+          " | point motorway tag=" + (tags.motorway || "-") +
+          " | OSM tag ref=" + (tags.ref || "-") +
           " | point ref=" + (j.ref || "-") +
           " | junction:ref=" + (tags["junction:ref"] || "-");
       });
