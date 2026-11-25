@@ -108,6 +108,16 @@
   </div>
 
   <div class="panel">
+    <h3>Interchange connectivity diagnostic (test only)</h3>
+    <label for="connectivityJunction">Junction name</label>
+    <input id="connectivityJunction" value="Eccles Interchange">
+    <label for="connectivityRef">Requested motorway reference</label>
+    <input id="connectivityRef" value="M60">
+    <button id="connectivityButton">Trace connected motorway branches</button>
+    <div id="connectivityReport" class="small">This report uses road endpoint connectivity and does not alter existing search results.</div>
+  </div>
+
+  <div class="panel">
     <h3>Map</h3>
     <div id="map"></div>
   </div>
@@ -124,6 +134,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="./connectivity-diagnostic.js"></script>
 
   <script>
     // --------------------------------------------------
@@ -154,6 +165,8 @@
     let junctions = [];
     let slipRoads = [];
     let mainlineRoads = [];
+    // Diagnostic-only collection; existing proximity matching does not read it.
+    let connectivityRoadFeatures = [];
 
     let selectedMarker = null;
 
@@ -305,6 +318,11 @@
         const highway = String(props.highway || "").toLowerCase();
         const geometry = feature.geometry;
 
+        if ((highway === "motorway" || highway === "motorway_link") &&
+            (geometry.type === "LineString" || geometry.type === "MultiLineString")) {
+          connectivityRoadFeatures.push(feature);
+        }
+
         if (
           geometry.type === "Point" &&
           (highway === "motorway_junction" ||
@@ -385,6 +403,7 @@
       junctions = [];
       slipRoads = [];
       mainlineRoads = [];
+      connectivityRoadFeatures = [];
 
       const junctionKeys = new Set();
       const slipKeys = new Set();
@@ -1220,6 +1239,43 @@
           maximumAge: 30000
         }
       );
+    });
+
+    document.getElementById("connectivityButton").addEventListener("click", function () {
+      const query = normalise(document.getElementById("connectivityJunction").value);
+      const matchingJunctions = junctions.filter(function (junction) {
+        return normalise(junction.name).includes(query) ||
+          (query && normalise(junction.ref).includes(query));
+      });
+      const points = matchingJunctions.map(junction => [junction.lon, junction.lat]);
+      const output = document.getElementById("connectivityReport");
+      if (!points.length) {
+        output.textContent = "No matching junction points are loaded. Check the junction name or data files.";
+        return;
+      }
+      const report = HighwayConnectivityDiagnostic.analyse(
+        connectivityRoadFeatures, points, document.getElementById("connectivityRef").value
+      );
+      output.innerHTML = "";
+      const summary = document.createElement("p");
+      summary.textContent = matchingJunctions.length + " matching junction point(s); " +
+        report.summary.connected + " physically connected link(s), " +
+        report.summary.unconnected + " nearby unconnected link(s). Connected refs: " +
+        (report.summary.refs.join(", ") || "none");
+      output.appendChild(summary);
+      report.branches.forEach(function (branch) {
+        const row = document.createElement("p");
+        row.textContent = (branch.connected ? "CONNECTED — " : "NOT CONNECTED — ") +
+          branch.id + " [" + (branch.ref || "no ref") + "] " +
+          (branch.destination ? "towards " + branch.destination : "") +
+          (branch.destinationRef ? " (" + branch.destinationRef + ")" : "");
+        output.appendChild(row);
+      });
+      if (!report.seedMainlineIds.length) {
+        const note = document.createElement("p");
+        note.textContent = "No requested-ref motorway mainline was found within the diagnostic junction radius.";
+        output.appendChild(note);
+      }
     });
 
     // Start loading both databases as soon as the app opens.
