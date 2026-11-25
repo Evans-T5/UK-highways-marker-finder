@@ -951,6 +951,12 @@
       const pointDiagnostics = confirmedEntries.map(function (entry, index) {
         const j = entry.junction;
         const tags = j.tags || {};
+        const candidateOffset = distanceMetres(
+          strongestCandidate.junction.lat,
+          strongestCandidate.junction.lon,
+          j.lat,
+          j.lon
+        );
         return (index + 1) + ". " + (j.name || "Unnamed junction") +
           " | coordinates=" + j.lat.toFixed(6) + ", " + j.lon.toFixed(6) +
           " | nearest " + road + " marker post=" +
@@ -963,6 +969,9 @@
             ? (entry.nearestMainline.ref || entry.nearestMainline.name || "unnamed") +
               " at " + Math.round(entry.mainlineDistance) + "m"
             : "not confirmed") +
+          " | candidate offset=" + Math.round(candidateOffset) + "m" +
+          " | point highway=" + (tags.highway || "-") +
+          " | point road ref=" + (tags.ref || "-") +
           " | point ref=" + (j.ref || "-") +
           " | junction:ref=" + (tags["junction:ref"] || "-");
       });
