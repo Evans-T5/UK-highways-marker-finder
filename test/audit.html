@@ -21,8 +21,9 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f8fa;padding:10px;
 <p>This separate test page runs searches against the existing test finder. It does not edit the finder or its datasets.</p>
 <div class="panel">
 <h2>Test plan</h2>
-<p>Batch includes M25 J1A/J1B and J2–J30, M1 J29A, and M6 J6 (Spaghetti Junction).</p>
-<p class="muted">A successful result means the existing matching rules accepted one or more numbered points. It does not prove that every highlighted green link physically joins that junction.</p>
+<p>Core checks: M25 J1A/J1B and J2–J30, M1 J29A, and M6 J6 (Spaghetti Junction).</p>
+<p>Additional coverage probes: M1, M3, M4, M5, M6, M8, M9, M11, M23, M27, M40, M42, M60 and M62.</p>
+<p class="muted">These probes show whether the current data and matching rules return a result. A MATCH is not independent proof that the numbered point is the correct real-world junction. Green links are proximity matches and are not confirmed physical connections.</p>
 <button id="run">Run automated tests</button>
 <div id="status" class="status">Ready. Press the button to load the test finder and begin.</div>
 <div id="loadInfo" class="muted"></div>
@@ -47,7 +48,18 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f8fa;padding:10px;
     {road:"M25",junction:"J1A"},{road:"M25",junction:"J1B"},
     ...Array.from({length:29},(_,i)=>({road:"M25",junction:"J"+(i+2)})),
     {road:"M1",junction:"J29A"},
-    {road:"M6",junction:"J6",label:"Spaghetti Junction"}
+    {road:"M6",junction:"J6",label:"Spaghetti Junction"},
+    // Wider coverage probes across the UK motorway network.
+    ...[
+      ["M1","J6A"],["M1","J10"],["M1","J19"],["M1","J23A"],["M1","J28"],
+      ["M3","J3"],["M4","J19"],["M4","J20"],
+      ["M5","J4A"],["M5","J15"],
+      ["M6","J10"],["M6","J15"],["M6","J19"],["M6","J21A"],
+      ["M6","J26"],["M6","J33"],["M6","J40"],
+      ["M8","J1"],["M9","J1A"],["M11","J6"],["M23","J8"],["M27","J3"],
+      ["M40","J9"],["M42","J3A"],["M42","J7"],
+      ["M60","J12"],["M60","J18"],["M62","J18"],["M62","J28"]
+    ].map(([road,junction])=>({road,junction,probe:true}))
   ];
   const frame=document.getElementById("engine");
   const runButton=document.getElementById("run");
