@@ -153,6 +153,7 @@
     let markerPosts = [];
     let junctions = [];
     let slipRoads = [];
+    let mainlineRoads = [];
 
     let selectedMarker = null;
 
@@ -383,14 +384,16 @@
     async function loadGeoJSONFiles() {
       junctions = [];
       slipRoads = [];
+      mainlineRoads = [];
 
       const junctionKeys = new Set();
       const slipKeys = new Set();
       let loadedFiles = 0;
+      const totalFiles = geojsonFileNames.length + 1;
       const failedFiles = [];
 
       document.getElementById("geoMessage").textContent =
-        "Downloading 27 junction and slip-road files...";
+        "Downloading junction, slip-road and mainline files...";
 
       // Load three files at a time to avoid overwhelming phones and laptops.
       for (let i = 0; i < geojsonFileNames.length; i += 3) {
@@ -417,16 +420,66 @@
         loadedFiles += results.filter(Boolean).length;
 
         document.getElementById("geoMessage").textContent =
-          loadedFiles + " of " + geojsonFileNames.length +
-          " junction and slip-road files loaded...";
+          loadedFiles + " of " + totalFiles +
+          " junction, slip-road and mainline files loaded...";
+      }
+
+      // Load the separate M25/A282 carriageway dataset. Keep these roads
+      // separate from slip roads so they cannot be displayed as ramps.
+      try {
+        const response = await fetch("./M25_A282_mainline.geojson");
+        if (!response.ok) {
+          throw new Error("HTTP " + response.status);
+        }
+
+        const data = await response.json();
+        const features = data.type === "FeatureCollection"
+          ? data.features
+          : [data];
+
+        features.forEach(function (feature) {
+          if (!feature || !feature.geometry) return;
+
+          const props = feature.properties || {};
+          const highway = String(props.highway || "").toLowerCase();
+          const geometry = feature.geometry;
+
+          if (
+            (highway !== "motorway" && highway !== "trunk") ||
+            (geometry.type !== "LineString" &&
+             geometry.type !== "MultiLineString")
+          ) return;
+
+          const paths = geometry.type === "LineString"
+            ? [geometry.coordinates]
+            : geometry.coordinates;
+
+          paths.forEach(function (path) {
+            if (!Array.isArray(path) || path.length < 2) return;
+
+            mainlineRoads.push({
+              coordinates: path,
+              highway: highway,
+              name: props.name || "",
+              ref: props.ref || "",
+              tags: Object.assign({}, props)
+            });
+          });
+        });
+
+        loadedFiles++;
+      } catch (error) {
+        console.error("Could not load M25/A282 mainline data", error);
+        failedFiles.push("M25_A282_mainline.geojson");
       }
 
       // Junction markers are drawn only when a marker post is selected.
 
       document.getElementById("geoMessage").textContent =
-        junctions.length.toLocaleString() + " junctions and " +
-        slipRoads.length.toLocaleString() + " slip-road sections loaded from " +
-        loadedFiles + " of " + geojsonFileNames.length + " files.";
+        junctions.length.toLocaleString() + " junctions, " +
+        slipRoads.length.toLocaleString() + " slip-road sections and " +
+        mainlineRoads.length.toLocaleString() + " mainline sections loaded from " +
+        loadedFiles + " of " + totalFiles + " files.";
 
       if (failedFiles.length) {
         document.getElementById("geoMessage").textContent +=
