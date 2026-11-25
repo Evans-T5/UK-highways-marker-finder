@@ -788,8 +788,27 @@
       // Five kilometres allows a large interchange to span several km while
       // preventing a distant same-number point from being treated as this junction.
       const MAX_JUNCTION_CLUSTER_DISTANCE = 5000;
-      const strongestCandidate = ranked[0];
-      const localRanked = ranked.filter(function (entry) {
+      // Do not build a local group around an arbitrary point if no candidate
+      // has any finite evidence from the requested motorway.
+      const evidenceRanked = ranked.filter(function (entry) {
+        return Number.isFinite(entry.markerPostDistance) ||
+               Number.isFinite(entry.mainlineDistance);
+      });
+
+      if (!evidenceRanked.length) {
+        document.getElementById("results").textContent =
+          road + " J" + junctionRef +
+          " — numbered points exist, but no " + road +
+          " marker post or matching mainline geometry was found for any candidate. " +
+          "No junction has been selected because the motorway cannot be independently confirmed.";
+        document.getElementById("nearby").textContent =
+          "No junction selected. This search has no independent location evidence for " + road + ".";
+        setStatus("Could not safely associate the numbered point with " + road + ".");
+        return true;
+      }
+
+      const strongestCandidate = evidenceRanked[0];
+      const localRanked = evidenceRanked.filter(function (entry) {
         return distanceMetres(
           strongestCandidate.junction.lat,
           strongestCandidate.junction.lon,
@@ -896,13 +915,22 @@
         const latlngs = entry.item.coordinates.map(function (p) {
           return [p[1], p[0]];
         });
+        const linkRef = normalise(entry.item.ref);
+        const linkMatchesRoad = linkRef === road ||
+          (road === "M25" && linkRef === "A282");
+        const linkHasNoRef = !linkRef;
+        const linkColour = linkMatchesRoad ? "#168a45" :
+          (linkHasNoRef ? "#d28b00" : "#777777");
+        const linkClass = linkMatchesRoad ? "matching road reference" :
+          (linkHasNoRef ? "unclassified nearby link" : "different road reference: " + entry.item.ref);
+
         L.polyline(latlngs, {
-          color: "#168a45",
+          color: linkColour,
           weight: 5
         }).bindPopup(
           (entry.item.name || entry.item.ref || entry.item.highway || "Unnamed link") +
           "<br>" + Math.round(entry.distance) +
-          "m from a numbered junction point"
+          "m from a numbered junction point<br>" + linkClass
         ).addTo(slipLayer);
 
         entry.item.coordinates.forEach(function (p) {
@@ -964,8 +992,9 @@
       document.getElementById("nearby").textContent =
         confirmedEntries.length + " numbered junction point(s) identified for " +
         road + " J" + junctionRef + ". " + nearbyRoads.length +
-        " nearby link section(s) highlighted. The green links are proximity matches; " +
-        "their physical connection should be checked on the map.";
+        " nearby link section(s) highlighted. Green = matching road reference; " +
+        "orange = no road reference; grey = a different road reference. " +
+        "All links are proximity candidates and still require physical-connection checking.";
       setStatus(
         road + " J" + junctionRef + ": " + confirmedEntries.length +
         " junction point(s) confirmed by marker posts or mapped mainline; " +
