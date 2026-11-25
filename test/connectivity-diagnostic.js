@@ -35,7 +35,21 @@
 
   function pointToPath(point, path) {
     let nearest = Infinity;
-    for (const coord of path) nearest = Math.min(nearest, haversine(point, coord));
+    const latitudeScale = 111320;
+    const longitudeScale = latitudeScale * Math.cos(Number(point[1]) * Math.PI / 180);
+    for (let i = 0; i < path.length; i++) {
+      nearest = Math.min(nearest, haversine(point, path[i]));
+      if (i === 0) continue;
+      const previous = path[i - 1], current = path[i];
+      const ax = (Number(previous[0]) - Number(point[0])) * longitudeScale;
+      const ay = (Number(previous[1]) - Number(point[1])) * latitudeScale;
+      const bx = (Number(current[0]) - Number(point[0])) * longitudeScale;
+      const by = (Number(current[1]) - Number(point[1])) * latitudeScale;
+      const dx = bx - ax, dy = by - ay;
+      const lengthSquared = dx * dx + dy * dy;
+      const t = lengthSquared ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / lengthSquared)) : 0;
+      nearest = Math.min(nearest, Math.hypot(ax + t * dx, ay + t * dy));
+    }
     return nearest;
   }
 
