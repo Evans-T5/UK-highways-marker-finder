@@ -30,7 +30,7 @@
   }
 
   function normalRef(value) {
-    return String(value || "").toUpperCase().replace(/\\s+/g, "");
+    return String(value || "").toUpperCase().replace(/\s+/g, "");
   }
 
   function pointToPath(point, path) {
