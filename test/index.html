@@ -776,12 +776,29 @@
           mainlineDistance: mainlineDistance
         };
       }).sort(function (a, b) {
-        // Keep the existing marker-post ranking; mainline is an independent
-        // confirmation path, not a change to the 300m marker-post limit.
-        return a.markerPostDistance - b.markerPostDistance;
+        // Rank candidates by the strongest independent location evidence:
+        // either a matching-road marker post or a matching mapped mainline.
+        return Math.min(a.markerPostDistance, a.mainlineDistance) -
+               Math.min(b.markerPostDistance, b.mainlineDistance);
       });
 
-      const confirmedEntries = ranked.filter(function (entry) {
+      // A junction number can occur in unrelated map features elsewhere in
+      // the UK (for example, M6 J6 also picked up points at Orrell).
+      // Keep only the local group around the best-supported candidate.
+      // Five kilometres allows a large interchange to span several km while
+      // preventing a distant same-number point from being treated as this junction.
+      const MAX_JUNCTION_CLUSTER_DISTANCE = 5000;
+      const strongestCandidate = ranked[0];
+      const localRanked = ranked.filter(function (entry) {
+        return distanceMetres(
+          strongestCandidate.junction.lat,
+          strongestCandidate.junction.lon,
+          entry.junction.lat,
+          entry.junction.lon
+        ) <= MAX_JUNCTION_CLUSTER_DISTANCE;
+      });
+
+      const confirmedEntries = localRanked.filter(function (entry) {
         const markerPostConfirmed =
           entry.nearestPost &&
           entry.markerPostDistance <= MAX_MARKER_POST_DISTANCE;
@@ -792,7 +809,7 @@
       });
 
       if (!confirmedEntries.length) {
-        const diagnostic = ranked.slice(0, 15).map(function (entry, index) {
+        const diagnostic = localRanked.slice(0, 15).map(function (entry, index) {
           const j = entry.junction;
           return (index + 1) + ". " + (j.name || "Unnamed junction") +
             " | point=" + j.lat.toFixed(6) + ", " + j.lon.toFixed(6) +
@@ -935,7 +952,8 @@
 
       document.getElementById("results").textContent =
         road + " J" + junctionRef + " — " + confirmedEntries.length +
-        " numbered junction point(s) confirmed using either a marker post within " +
+        " numbered junction point(s) confirmed in the best-supported local group (within " +
+        (MAX_JUNCTION_CLUSTER_DISTANCE / 1000) + "km) using either a marker post within " +
         MAX_MARKER_POST_DISTANCE + "m or mapped mainline geometry within " +
         MAX_MAINLINE_DISTANCE + "m. The marker-post limit remains unchanged.\n\n" +
         "NUMBERED JUNCTION POINTS:\n" + pointDiagnostics.join("\n") +
