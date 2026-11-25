@@ -97,7 +97,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f8fa;padding:10px;
     const pointMatch=result.match(/—\s*(\d+)\s+numbered (?:junction )?point\(s\) confirmed/i);
     const linkMatch=nearby.match(/(\d+)\s+nearby link section\(s\) highlighted/i);
     const noPoint=/No junction point numbered/i.test(result);
-    const rejected=/numbered points were found, but none was close enough/i.test(result);
+    const rejected=/numbered points were found, but none was close enough|points found, but no A\/B mainline post within/i.test(result);
     const points=pointMatch?Number(pointMatch[1]):0;
     const links=linkMatch?Number(linkMatch[1]):0;
     let outcome="CHECK";
