@@ -104,7 +104,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f8fa;padding:10px;
     if(points>0)outcome="MATCH";
     else if(noPoint)outcome="NO NUMBERED POINT";
     else if(rejected)outcome="NOT CONFIRMED";
-    return {outcome,points,links,details:result.slice(0,900)};
+    return {outcome,points,links,details:result};
   }
   async function run(){
     runButton.disabled=true;rows.innerHTML="";diagnostics.textContent="";
